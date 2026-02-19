@@ -4,233 +4,53 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>학사일정</title>
-    
     <script src="https://cdn.tailwindcss.com"></script>
-    
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
-    
     <script src="https://unpkg.com/@babel/standalone@7.23.5/babel.min.js"></script>
-    
-    <!-- XLSX 라이브러리 추가 -->
     <script src="https://unpkg.com/xlsx/dist/xlsx.full.min.js"></script>
-    
     <style>
-      /* Basic CSS Reset and Font Smoothing */
-      body {
-        -webkit-font-smoothing: antialiased;
-        -moz-osx-font-smoothing: grayscale;
-      }
-      /* Custom style for responsive calendar header (for multiday events) */
-      .grid-rows-auto {
-        grid-auto-rows: minmax(100px, 1fr); 
-      }
+      body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+      .grid-rows-auto { grid-auto-rows: minmax(100px, 1fr); }
     </style>
-
-    <!-- React and ReactDOM from CDN -->
     <script src="https://unpkg.com/react@18.2.0/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18.2.0/umd/react-dom.production.min.js"></script>
-
     <script>
-      // Tailwind CSS Configuration - wait for tailwind to load
-      if (typeof tailwind !== 'undefined') {
-        tailwind.config = {
-          theme: {
-            extend: {
-              fontFamily: {
-                sans: ['Inter', 'Noto Sans KR', 'sans-serif'],
-              },
-            },
-          },
-        }
-      }
-      
-      const base64ToArrayBuffer = (base64) => {
-        const binaryString = window.atob(base64.split(',')[1]);
-        const len = binaryString.length;
-        const bytes = new Uint8Array(len);
-        for (let i = 0; i < len; i++) {
-          bytes[i] = binaryString.charCodeAt(i);
-        }
-        return bytes.buffer;
+      if (typeof tailwind !== 'undefined') { tailwind.config = { theme: { extend: { fontFamily: { sans: ['Inter', 'Noto Sans KR', 'sans-serif'] } } } } }
+      const processExcelFile = (file, cb, onErr) => {
+          const r = new FileReader();
+          r.onload = (e) => { try { const wb = XLSX.read(e.target.result, {type:'binary'}); cb(XLSX.utils.sheet_to_csv(wb.Sheets[wb.SheetNames[0]], {FS:',',RS:'\n'})); } catch(x) { onErr("엑셀 파일 처리 오류"); } };
+          r.onerror = () => onErr("파일 읽기 오류");
+          const fn = file.name.toLowerCase();
+          if (fn.endsWith('.xlsx')||fn.endsWith('.xls')) r.readAsBinaryString(file); else onErr("지원하지 않는 파일 형식");
       };
-      
-      const processExcelFile = (file, callback, onError) => {
-          const reader = new FileReader();
-          reader.onload = (event) => {
-              try {
-                  const data = event.target.result;
-                  const workbook = XLSX.read(data, { type: 'binary' });
-                  const sheetName = workbook.SheetNames[0];
-                  const worksheet = workbook.Sheets[sheetName];
-                  
-                  const csv = XLSX.utils.sheet_to_csv(worksheet, { FS: ',', RS: '\n' });
-                  callback(csv);
-              } catch (e) {
-                  console.error("Error processing Excel file:", e);
-                  onError("엑셀 파일을 처리하는 중 오류가 발생했습니다. 파일 형식을 확인해주세요.");
-              }
-          };
-          reader.onerror = (e) => {
-              console.error("Error reading file:", e);
-              onError("파일을 읽는 중 오류가 발생했습니다.");
-          };
-          
-          const fileName = file.name.toLowerCase();
-          if (fileName.endsWith('.xlsx') || fileName.endsWith('.xls')) {
-              reader.readAsBinaryString(file);
-          } else {
-              onError("지원하지 않는 파일 형식입니다.");
-          }
-      };
-
-      const processCsvFile = (file, callback, onError) => {
-          const reader = new FileReader();
-          reader.onload = (event) => {
-              try {
-                  let text = event.target.result;
-                  if (text.charCodeAt(0) === 0xFEFF) {
-                      text = text.slice(1);
-                  }
-                  text = text.replace(/\r\n|\r/g, '\n');
-                  callback(text);
-              } catch (e) {
-                  console.error('파일을 읽는 중 오류가 발생했습니다.', e);
-                  onError("CSV 파일을 읽는 중 오류가 발생했습니다.");
-              }
-          };
-          reader.onerror = (e) => {
-              console.error("Error reading file:", e);
-              onError("파일을 읽는 중 오류가 발생했습니다.");
-          };
-          reader.readAsText(file);
+      const processCsvFile = (file, cb, onErr) => {
+          const r = new FileReader();
+          r.onload = (e) => { try { let t=e.target.result; if(t.charCodeAt(0)===0xFEFF) t=t.slice(1); t=t.replace(/\r\n|\r/g,'\n'); cb(t); } catch(x) { onErr("CSV 읽기 오류"); } };
+          r.onerror = () => onErr("파일 읽기 오류"); r.readAsText(file);
       };
     </script>
 </head>
 <body class="bg-gradient-to-br from-sky-200 to-blue-100 p-2 sm:p-4 lg:p-8 min-h-screen">
     <div id="root"></div>
-
     <script type="text/babel" data-presets="react">
         const { useState, useMemo, useCallback, useEffect } = React;
-        
-        // --- Error Boundary Component ---
-        class ErrorBoundary extends React.Component {
-            constructor(props) {
-                super(props);
-                this.state = { hasError: false, error: null };
-            }
 
-            static getDerivedStateFromError(error) {
-                return { hasError: true, error };
-            }
+        // === Date utility functions ===
+        const startOfMonth = (d) => { const r=new Date(d); r.setDate(1); r.setHours(0,0,0,0); return r; };
+        const endOfMonth = (d) => { const r=new Date(d.getFullYear(),d.getMonth()+1,0); r.setHours(23,59,59,999); return r; };
+        const dateFnsStartOfWeek = (d, o={}) => { const w=o.weekStartsOn||0; const r=new Date(d); const dy=r.getDay(); r.setDate(r.getDate()-((dy<w?7:0)+dy-w)); r.setHours(0,0,0,0); return r; };
+        const endOfWeek = (d, o={}) => { const w=o.weekStartsOn||0; const r=new Date(d); const dy=r.getDay(); r.setDate(r.getDate()+((dy<w?-7:0)+6-(dy-w))); r.setHours(23,59,59,999); return r; };
+        const eachDayOfInterval = ({start,end}) => { const days=[]; const c=new Date(start); c.setHours(0,0,0,0); const e=new Date(end); e.setHours(0,0,0,0); while(c<=e){days.push(new Date(c));c.setDate(c.getDate()+1);} return days; };
+        const format = (d, f) => { const mn=['January','February','March','April','May','June','July','August','September','October','November','December']; if(f==='MMMM yyyy') return `${mn[d.getMonth()]} ${d.getFullYear()}`; if(f==='d') return String(d.getDate()); return d.toLocaleDateString(); };
+        const isSameMonth = (a,b) => a.getFullYear()===b.getFullYear()&&a.getMonth()===b.getMonth();
+        const isToday = (d) => { const t=new Date(); return d.getFullYear()===t.getFullYear()&&d.getMonth()===t.getMonth()&&d.getDate()===t.getDate(); };
 
-            componentDidCatch(error, errorInfo) {
-                console.error("Uncaught error:", error, errorInfo);
-            }
-
-            render() {
-                if (this.state.hasError) {
-                    return (
-                        <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-red-50 text-center">
-                            <h1 className="text-2xl font-bold text-red-600 mb-4">오류가 발생했습니다</h1>
-                            <p className="text-slate-700 mb-6 bg-white p-4 rounded shadow border border-red-200 max-w-lg overflow-auto text-sm text-left">
-                                {this.state.error && this.state.error.toString()}
-                            </p>
-                            <button 
-                                onClick={() => window.location.reload()}
-                                className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium transition-colors shadow-lg"
-                            >
-                                페이지 새로고침
-                            </button>
-                        </div>
-                    );
-                }
-                return this.props.children;
-            }
-        }
-
-        // --- Manual implementation of date-fns functions ---
-        const startOfMonth = (date) => {
-            const result = new Date(date);
-            result.setDate(1);
-            result.setHours(0, 0, 0, 0);
-            return result;
-        };
-        
-        const endOfMonth = (date) => {
-            const result = new Date(date.getFullYear(), date.getMonth() + 1, 0);
-            result.setHours(23, 59, 59, 999);
-            return result;
-        };
-        
-        const dateFnsStartOfWeek = (date, options = {}) => {
-            const weekStartsOn = options.weekStartsOn || 0;
-            const result = new Date(date);
-            const day = result.getDay();
-            const diff = (day < weekStartsOn ? 7 : 0) + day - weekStartsOn;
-            result.setDate(result.getDate() - diff);
-            result.setHours(0, 0, 0, 0);
-            return result;
-        };
-        
-        const endOfWeek = (date, options = {}) => {
-            const weekStartsOn = options.weekStartsOn || 0;
-            const result = new Date(date);
-            const day = result.getDay();
-            const diff = (day < weekStartsOn ? -7 : 0) + 6 - (day - weekStartsOn);
-            result.setDate(result.getDate() + diff);
-            result.setHours(23, 59, 59, 999);
-            return result;
-        };
-        
-        const eachDayOfInterval = ({ start, end }) => {
-            const days = [];
-            const current = new Date(start);
-            current.setHours(0, 0, 0, 0);
-            const endDate = new Date(end);
-            endDate.setHours(0, 0, 0, 0);
-            
-            while (current <= endDate) {
-                days.push(new Date(current));
-                current.setDate(current.getDate() + 1);
-            }
-            return days;
-        };
-        
-        const format = (date, formatStr) => {
-            const year = date.getFullYear();
-            const month = date.getMonth();
-            const day = date.getDate();
-            const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 
-                               'July', 'August', 'September', 'October', 'November', 'December'];
-            
-            if (formatStr === 'MMMM yyyy') {
-                return `${monthNames[month]} ${year}`;
-            }
-            if (formatStr === 'd') {
-                return String(day);
-            }
-            return date.toLocaleDateString();
-        };
-        
-        const isSameMonth = (date1, date2) => {
-            return date1.getFullYear() === date2.getFullYear() && 
-                   date1.getMonth() === date2.getMonth();
-        };
-        
-        const isToday = (date) => {
-            const today = new Date();
-            return date.getFullYear() === today.getFullYear() &&
-                   date.getMonth() === today.getMonth() &&
-                   date.getDate() === today.getDate();
-        };
-        // --- End of date functions ---
-
-        // --- START: data/schoolData.ts ---
+        // === School Data ===
         const DEFAULT_SCHOOL_NAME = '원묵고등학교';
-        const DEFAULT_LOGO_DATA_URL = 'https://i.imgur.com/6ZCUaap.jpeg'; 
-        
+        const DEFAULT_LOGO_DATA_URL = 'https://i.imgur.com/6ZCUaap.jpeg';
+
         const rawEventsCsv = `"날짜","행사1","행사2","행사3"
 "2026. 2. 11","신학년대비집중연수","학교로찾아오는 컨설팅 AI 연수",""
 "2026. 2. 12","신학년대비집중연수","학교로찾아오는 컨설팅 AI 연수",""
@@ -389,1020 +209,329 @@
 `;
 
         const rawDutiesCsv = `"날짜","요일","지도교사","종류","비고"
-"2026. 3. 2","월","신**","휴일근무","대체공휴일(3·1절)"
+"2026. 3. 2","월","신미래","휴일근무","대체공휴일(3·1절)"
+"2026. 3. 3","화","김화섭","",""
+
 `;
-        // --- END: data/schoolData.ts ---
 
-        // --- START: utils/dataProcessor.ts ---
-        const parseDate = (dateStr) => {
-            if (!dateStr) return null;
-            let cleanedStr = dateStr.replace(/\./g, '-').replace(/\s/g, '');
-            let parts = cleanedStr.split('-').filter(p => p);
-            
-            if (parts.length === 3) {
-                const [year, month, day] = parts.map(p => parseInt(p, 10));
-                if (!isNaN(year) && year > 1900 && !isNaN(month) && month >= 1 && month <= 12 && !isNaN(day) && day >= 1 && day <= 31) {
-                    return new Date(year, month - 1, day); 
-                }
-            }
-            cleanedStr = dateStr.replace(/\./g, '/').replace(/\s/g, '');
-            parts = cleanedStr.split('/');
-            
-            if (parts.length === 3) {
-                const [month, day, year] = parts.map(p => parseInt(p, 10));
-                if (!isNaN(year) && year > 1900 && !isNaN(month) && month >= 1 && month <= 12 && !isNaN(day) && day >= 1 && day <= 31) {
-                    return new Date(year, month - 1, day);
-                }
-            }
-            const date = new Date(dateStr);
-            if (date instanceof Date && !isNaN(date)) {
-                return date;
-            }
-            return null;
+        // === Data Processing ===
+        const parseDate = (s) => {
+            if(!s) return null;
+            let c=s.replace(/\./g,'-').replace(/\s/g,''); let p=c.split('-').filter(x=>x);
+            if(p.length===3){const[y,m,d]=p.map(x=>parseInt(x,10));if(!isNaN(y)&&y>1900&&m>=1&&m<=12&&d>=1&&d<=31)return new Date(y,m-1,d);}
+            c=s.replace(/\./g,'/').replace(/\s/g,'');p=c.split('/');
+            if(p.length===3){const[m,d,y]=p.map(x=>parseInt(x,10));if(!isNaN(y)&&y>1900&&m>=1&&m<=12&&d>=1&&d<=31)return new Date(y,m-1,d);}
+            const dt=new Date(s); if(dt instanceof Date&&!isNaN(dt))return dt; return null;
         };
-
-        const formatDateKey = (date) => {
-            return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-        };
-
+        const formatDateKey = (d) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
         const parseCsvLine = (line) => {
-            const fields = [];
-            let currentField = '';
-            let inQuotes = false;
-
-            for (const char of line) {
-                if (char === '"') {
-                    inQuotes = !inQuotes;
-                } else if (char === ',' && !inQuotes) {
-                    fields.push(currentField.trim());
-                    currentField = '';
-                } else {
-                    currentField += char;
-                }
-            }
-            fields.push(currentField.trim());
-            return fields.map(f => f.replace(/^"|"$/g, ''));
+            const fields=[]; let cur='',inQ=false;
+            for(const ch of line){if(ch==='"')inQ=!inQ;else if(ch===','&&!inQ){fields.push(cur.trim());cur='';}else cur+=ch;}
+            fields.push(cur.trim()); return fields.map(f=>f.replace(/^"|"$/g,''));
         };
+        const parseEventsCsv = (csv) => { const lines=csv.trim().split('\n').slice(1); const evts=[]; lines.forEach(l=>{if(!l.trim())return;const[d,...ep]=parseCsvLine(l);const es=ep.map(e=>e.trim().replace(/"/g,'')).filter(e=>e);if(d&&es.length>0)evts.push({date:d,events:es});}); return evts; };
+        const parseHolidaysCsv = (csv) => { const lines=csv.trim().split('\n').slice(1); const h=[]; lines.forEach(l=>{if(!l.trim())return;const[ds,nm]=parseCsvLine(l);const d=parseDate(ds);if(d&&nm)h.push({date:d,name:nm.trim()});}); return h; };
+        const parseTeachersCsv = (csv) => { const lines=csv.trim().split('\n').slice(1); const d=[]; lines.forEach(l=>{if(!l.trim())return;const[ds,_,t]=parseCsvLine(l);const dt=parseDate(ds);if(dt&&t&&t.trim())d.push({date:dt,teacher:t.trim()});}); return d; };
 
-        const parseEventsCsv = (csvText) => {
-            const lines = csvText.trim().split('\n').slice(1);
-            const events = [];
-            lines.forEach(line => {
-                if (!line.trim()) return; 
-                const [date, ...eventParts] = parseCsvLine(line);
-                const eventStrings = eventParts.map(e => e.trim().replace(/"/g, '')).filter(e => e);
-                if (date && eventStrings.length > 0) {
-                    events.push({ date, events: eventStrings });
-                }
-            });
-            return events;
-        };
-
-        const parseHolidaysCsv = (csvText) => {
-            const lines = csvText.trim().split('\n').slice(1);
-            const holidays = [];
-            lines.forEach(line => {
-                if (!line.trim()) return; 
-                const [dateStr, name] = parseCsvLine(line);
-                const date = parseDate(dateStr);
-                if (date && name) {
-                    holidays.push({ date, name: name.trim() });
-                }
-            });
-            return holidays;
-        };
-
-        const parseTeachersCsv = (csvText) => {
-            const lines = csvText.trim().split('\n').slice(1);
-            const duties = [];
-            lines.forEach(line => {
-                if (!line.trim()) return; 
-                const [dateStr, _day, teacher] = parseCsvLine(line);
-                const date = parseDate(dateStr);
-                if (date && teacher && teacher.trim()) {
-                    duties.push({ date, teacher: teacher.trim() });
-                }
-            });
-            return duties;
-        };
-
+        /* [수정1] 색상: -200 파스텔 + 검정 글씨 */
         const EVENT_COLORS = [
-            { bg: 'bg-sky-100', text: 'text-sky-900' },
-            { bg: 'bg-emerald-100', text: 'text-emerald-900' },
-            { bg: 'bg-amber-100', text: 'text-amber-900' },
-            { bg: 'bg-violet-100', text: 'text-violet-900' },
-            { bg: 'bg-rose-100', text: 'text-rose-900' },
-            { bg: 'bg-lime-100', text: 'text-lime-900' },
-            { bg: 'bg-indigo-500', text: 'text-white' },
-            { bg: 'bg-emerald-600', text: 'text-white' },
-            { bg: 'bg-pink-400', text: 'text-white' },
-            { bg: 'bg-orange-500', text: 'text-white' }
+            {bg:'bg-sky-200',text:'text-black'},{bg:'bg-emerald-200',text:'text-black'},
+            {bg:'bg-amber-200',text:'text-black'},{bg:'bg-violet-200',text:'text-black'},
+            {bg:'bg-rose-200',text:'text-black'},{bg:'bg-lime-200',text:'text-black'},
+            {bg:'bg-indigo-200',text:'text-black'},{bg:'bg-green-200',text:'text-black'},
+            {bg:'bg-pink-200',text:'text-black'},{bg:'bg-orange-200',text:'text-black'}
         ];
+        const simpleHash=(s)=>{let h=0;for(let i=0;i<s.length;i++){h=(h<<5)-h+s.charCodeAt(i);h|=0;}return Math.abs(h);};
 
-        const simpleHash = (str) => {
-          let hash = 0;
-          for (let i = 0; i < str.length; i++) {
-            const char = str.charCodeAt(i);
-            hash = (hash << 5) - hash + char;
-            hash |= 0; 
-          }
-          return Math.abs(hash);
-        };
-        
-        const getEventColor = (eventTitle) => {
-            const activityKeywords = ['자율', '적응', '동아리', '봉사'];
-            const activityColor = 'bg-teal-500 text-white'; 
-            
-            for (const keyword of activityKeywords) {
-                if (eventTitle.includes(keyword)) {
-                    return activityColor;
-                }
-            }
-
-            const specialKeywords = {
-                '고사': 'bg-red-500 text-white font-bold',
-                '평가': 'bg-red-500 text-white font-bold',
-                '시험': 'bg-red-500 text-white font-bold', 
-                '방학': 'bg-blue-500 text-white',
-                '개학': 'bg-blue-500 text-white',
-                '졸업': 'bg-purple-500 text-white',
-                '입학': 'bg-purple-500 text-white',
-            };
-
-            for (const keyword in specialKeywords) {
-                if (eventTitle.includes(keyword)) {
-                    return specialKeywords[keyword];
-                }
-            }
-            
-            const themedKeywords = [
-                { keywords: ['인문', '독서'], color: 'bg-purple-600 text-white' },
-                { keywords: ['과학'], color: 'bg-blue-600 text-white' },
-                { keywords: ['예술', '미술', '음악'], color: 'bg-rose-500 text-white' },
-                { keywords: ['체육', '스포츠', '수련회'], color: 'bg-lime-600 text-white' },
-                { keywords: ['교원', '교직원회의', '연수', '협의회'], color: 'bg-yellow-500 text-white' }
-            ];
-    
-            for (const theme of themedKeywords) {
-                for (const keyword of theme.keywords) {
-                    if (eventTitle.includes(keyword)) {
-                        return theme.color;
-                    }
-                }
-            }
-
-            const hash = simpleHash(eventTitle);
-            const color = EVENT_COLORS[hash % EVENT_COLORS.length];
-            return `${color.bg} ${color.text}`;
+        const getEventColor = (t) => {
+            for(const kw of ['자율','적응','동아리','봉사']) if(t.includes(kw)) return 'bg-teal-200 text-black';
+            const sp={'고사':'bg-red-200 text-black font-bold','평가':'bg-red-200 text-black font-bold','시험':'bg-red-200 text-black font-bold','방학':'bg-blue-200 text-black','개학':'bg-blue-200 text-black','졸업':'bg-purple-200 text-black','입학':'bg-purple-200 text-black'};
+            for(const k in sp) if(t.includes(k)) return sp[k];
+            const th=[{kw:['인문','독서'],c:'bg-purple-200 text-black'},{kw:['과학'],c:'bg-blue-200 text-black'},{kw:['예술','미술','음악'],c:'bg-rose-200 text-black'},{kw:['체육','스포츠','수련회'],c:'bg-lime-200 text-black'},{kw:['교원','교직원회의','연수','협의회'],c:'bg-yellow-200 text-black'}];
+            for(const x of th) for(const k of x.kw) if(t.includes(k)) return x.c;
+            const c=EVENT_COLORS[simpleHash(t)%EVENT_COLORS.length]; return `${c.bg} ${c.text}`;
         };
 
-        const findAndProcessMultiDayEvents = (dayDataMap) => {
-            const multiDayEvents = [];
-            const processedEventIds = new Set();
-
-            const sortedDates = Array.from(dayDataMap.keys()).sort();
-
-            for (const dateKey of sortedDates) {
-                const dayData = dayDataMap.get(dateKey);
-                if (!dayData) continue;
-
-                for (const event of dayData.events) {
-                    const eventId = `${dateKey}_${event.fullTitle}`;
-                    if (processedEventIds.has(eventId)) continue;
-
-                    const baseTitleMatch = event.fullTitle.match(/^(.*?)(\s*\d+일차|\s*\(\d+\)|1일차)?$/);
-                    const baseTitle = baseTitleMatch ? baseTitleMatch[1].trim() : event.fullTitle;
-                    
-                    if (!baseTitle) continue;
-
-                    let endDate = new Date(dayData.date);
-                    const currentRunEventIds = [eventId];
-
-                    let currentCheckDate = new Date(dayData.date);
-                    currentCheckDate.setDate(currentCheckDate.getDate() + 1);
-                    let nextDateKey = formatDateKey(currentCheckDate);
-
-                    while (dayDataMap.has(nextDateKey)) {
-                        const nextDayData = dayDataMap.get(nextDateKey);
-                        const nextDayEvent = nextDayData.events.find(e => {
-                             const nextBaseTitleMatch = e.fullTitle.match(/^(.*?)(\s*\d+일차|\s*\(\d+\))?$/);
-                             return nextBaseTitleMatch && nextBaseTitleMatch[1].trim() === baseTitle;
-                        });
-
-                        if (nextDayEvent) {
-                            endDate = new Date(nextDayData.date);
-                            currentRunEventIds.push(`${nextDateKey}_${nextDayEvent.fullTitle}`);
-                        } else {
-                            break;
-                        }
-                        currentCheckDate.setDate(currentCheckDate.getDate() + 1);
-                        nextDateKey = formatDateKey(currentCheckDate);
-                    }
-                    
-                    if (endDate > dayData.date) {
-                        multiDayEvents.push({
-                            id: `${baseTitle}_${formatDateKey(dayData.date)}`,
-                            start: dayData.date,
-                            end: endDate,
-                            title: baseTitle,
-                            color: getEventColor(event.fullTitle),
-                        });
-                        currentRunEventIds.forEach(id => processedEventIds.add(id));
-                    }
-                }
-            }
-            
-            const laneManagedEvents = [];
-            multiDayEvents.sort((a,b) => a.start.getTime() - b.start.getTime());
-
-            for (const event of multiDayEvents) {
-                let lane = 0;
-                while(true) {
-                    const conflictingEvent = laneManagedEvents.find(e => e.lane === lane && !(event.start > e.end || event.end < e.start));
-                    if (!conflictingEvent) {
-                        laneManagedEvents.push({ ...event, lane });
-                        break;
-                    }
-                    lane++;
-                }
-            }
-
-            return { multiDayEvents: laneManagedEvents, processedEventIds };
+        const findAndProcessMultiDayEvents = (map) => {
+            const mde=[],processed=new Set(),sorted=Array.from(map.keys()).sort();
+            for(const dk of sorted){const dd=map.get(dk);if(!dd)continue;
+            for(const ev of dd.events){const eid=`${dk}_${ev.fullTitle}`;if(processed.has(eid))continue;
+            const m=ev.fullTitle.match(/^(.*?)(\s*\d+일차|\s*\(\d+\)|1일차)?$/);const bt=m?m[1].trim():ev.fullTitle;if(!bt)continue;
+            let ed=new Date(dd.date);const ids=[eid];let cd=new Date(dd.date);cd.setDate(cd.getDate()+1);let nk=formatDateKey(cd);
+            while(map.has(nk)){const nd=map.get(nk);const ne=nd.events.find(e=>{const mm=e.fullTitle.match(/^(.*?)(\s*\d+일차|\s*\(\d+\))?$/);return mm&&mm[1].trim()===bt;});
+            if(ne){ed=new Date(nd.date);ids.push(`${nk}_${ne.fullTitle}`);}else break;cd.setDate(cd.getDate()+1);nk=formatDateKey(cd);}
+            if(ed>dd.date){mde.push({id:`${bt}_${formatDateKey(dd.date)}`,start:dd.date,end:ed,title:bt,color:getEventColor(ev.fullTitle)});ids.forEach(i=>processed.add(i));}}}
+            const lanes=[];mde.sort((a,b)=>a.start.getTime()-b.start.getTime());
+            for(const ev of mde){let ln=0;while(true){if(!lanes.find(e=>e.lane===ln&&!(ev.start>e.end||ev.end<e.start))){lanes.push({...ev,lane:ln});break;}ln++;}}
+            return {multiDayEvents:lanes,processedEventIds:processed};
         };
 
-
-        const processCalendarData = (rawEvents, holidays, duties, userModifiedEvents = {}, userModifiedDuties = {}) => {
+        /* [수정2] processCalendarData: userOverrides 적용 - override가 있는 날짜는 CSV 대신 override 사용 */
+        const processCalendarData = (rawEvents, holidays, duties, userOverrides={}, dutyOverrides={}) => {
             const dayDataMap = new Map();
+            const baseEventsMap = new Map();
+            rawEvents.forEach(re => { const d=parseDate(re.date); if(d){const k=formatDateKey(d); if(!baseEventsMap.has(k))baseEventsMap.set(k,{date:d,events:[]}); re.events.forEach(t=>baseEventsMap.get(k).events.push(t));} });
 
-            // 1. 기본 학사일정 이벤트 처리 (우선 맵에 등록)
-            rawEvents.forEach(rawEvent => {
-                const date = parseDate(rawEvent.date);
-                if (date) {
-                    const key = formatDateKey(date);
-                    if (!dayDataMap.has(key)) {
-                        dayDataMap.set(key, { date, events: [], holiday: null, teacherDuty: null, isUserModified: false });
-                    }
-                    const dayData = dayDataMap.get(key);
-                    rawEvent.events.forEach(eventTitle => {
-                        dayData.events.push({
-                            title: eventTitle.length > 15 ? eventTitle.substring(0, 12) + '...' : eventTitle,
-                            fullTitle: eventTitle,
-                            color: getEventColor(eventTitle),
-                            isUserEvent: false
-                        });
-                    });
-                }
+            const allKeys = new Set([...baseEventsMap.keys(), ...Object.keys(userOverrides)]);
+            allKeys.forEach(key => {
+                const base = baseEventsMap.get(key);
+                const date = base ? base.date : (()=>{const[y,m,d]=key.split('-').map(Number);return new Date(y,m-1,d);})();
+                if(!dayDataMap.has(key)) dayDataMap.set(key, {date, events:[], allEvents:[], holiday:null, teacherDuty:null, baseDuty:null, isDutyOverridden:false, isOverridden:false, baseEvents:[]});
+                const dd = dayDataMap.get(key);
+                if(base) dd.baseEvents = [...base.events];
+                const titles = userOverrides[key]!==undefined ? userOverrides[key] : (base?base.events:[]);
+                dd.isOverridden = userOverrides[key]!==undefined;
+                titles.forEach(t => { dd.events.push({title:t.length>15?t.substring(0,12)+'...':t, fullTitle:t, color:getEventColor(t)}); });
             });
 
-            // 2. 공휴일 처리
-            holidays.forEach(holiday => {
-                const key = formatDateKey(holiday.date);
-                if (!dayDataMap.has(key)) {
-                    dayDataMap.set(key, { date: holiday.date, events: [], holiday: null, teacherDuty: null, isUserModified: false });
-                }
-                dayDataMap.get(key).holiday = holiday;
-            });
-
-            // 3. 당직 교사 처리
-            duties.forEach(duty => {
-                const key = formatDateKey(duty.date);
-                if (!dayDataMap.has(key)) {
-                    dayDataMap.set(key, { date: duty.date, events: [], holiday: null, teacherDuty: null, isUserModified: false });
-                }
-                dayDataMap.get(key).teacherDuty = duty;
-            });
-
-            // 4. [변경] 사용자 수정 이벤트 처리 (OVERWRITE LOGIC)
-            // 사용자가 수정한 날짜가 있으면, 기존 이벤트를 덮어씌웁니다.
-            Object.keys(userModifiedEvents).forEach(dateKey => {
-                const userEventList = userModifiedEvents[dateKey];
-                
-                // 날짜가 맵에 없으면 생성
-                if (!dayDataMap.has(dateKey)) {
-                    const [year, month, day] = dateKey.split('-').map(Number);
-                    dayDataMap.set(dateKey, { 
-                        date: new Date(year, month - 1, day), 
-                        events: [], 
-                        holiday: null, 
-                        teacherDuty: null,
-                        isUserModified: true 
-                    });
-                }
-                
-                const dayData = dayDataMap.get(dateKey);
-                
-                // 해당 날짜의 이벤트를 사용자 정의 이벤트로 완전히 교체
-                dayData.isUserModified = true;
-                dayData.events = userEventList.map(eventTitle => ({
-                    title: eventTitle.length > 15 ? eventTitle.substring(0, 12) + '...' : eventTitle,
-                    fullTitle: eventTitle,
-                    color: getEventColor(eventTitle),
-                    isUserEvent: true // 사용자가 편집한 상태임을 표시
-                }));
-            });
-
-            // 5. [신규] 사용자 수정 특별 행사(Duty) 처리
-            Object.keys(userModifiedDuties).forEach(dateKey => {
-                const userDutyText = userModifiedDuties[dateKey];
-                
-                 if (!dayDataMap.has(dateKey)) {
-                    const [year, month, day] = dateKey.split('-').map(Number);
-                    dayDataMap.set(dateKey, { 
-                        date: new Date(year, month - 1, day), 
-                        events: [], 
-                        holiday: null, 
-                        teacherDuty: null,
-                        isUserModified: true 
-                    });
-                }
-
-                const dayData = dayDataMap.get(dateKey);
-                dayData.isUserModified = true;
-
-                if (userDutyText) {
-                    // 기존 duty 객체 구조를 유지하면서 teacher 필드 업데이트
-                    dayData.teacherDuty = { 
-                        date: dayData.date, 
-                        teacher: userDutyText,
-                        // 기존 종류/비고가 있다면 유지할 수도 있지만, 여기서는 단순 텍스트 오버라이드로 처리
-                        // 원본 데이터가 있으면 그것을 참조할 수도 있으나, 단순화를 위해 텍스트 교체
-                    };
-                } else {
-                    // 빈 문자열로 저장된 경우 삭제 처리 (또는 빈 값 표시)
-                    dayData.teacherDuty = null;
-                }
-            });
-
-
-            // 6. 멀티데이 이벤트 감지 및 처리
-            const { multiDayEvents, processedEventIds } = findAndProcessMultiDayEvents(dayDataMap);
-
-            // 7. 멀티데이 이벤트로 처리된 단일 이벤트 처리 (삭제 대신 숨김 처리)
-            for (const [key, dayData] of dayDataMap.entries()) {
-                dayData.events.forEach(event => {
-                    const eventId = `${key}_${event.fullTitle}`;
-                    if (processedEventIds.has(eventId)) {
-                        event.isHidden = true; // 렌더링 시 숨김 처리 플래그 (삭제하지 않음)
-                    }
-                });
+            holidays.forEach(h => { const k=formatDateKey(h.date); if(!dayDataMap.has(k))dayDataMap.set(k,{date:h.date,events:[],allEvents:[],holiday:null,teacherDuty:null,baseDuty:null,isDutyOverridden:false,isOverridden:false,baseEvents:[]}); dayDataMap.get(k).holiday=h; });
+            duties.forEach(d => { const k=formatDateKey(d.date); if(!dayDataMap.has(k))dayDataMap.set(k,{date:d.date,events:[],allEvents:[],holiday:null,teacherDuty:null,baseDuty:null,isOverridden:false,baseEvents:[]}); const dd=dayDataMap.get(k); dd.teacherDuty=d; dd.baseDuty=d.teacher; });
+            // dutyOverrides 적용: 값이 있으면 덮어쓰기, 빈 문자열이면 삭제, null이면 삭제
+            for(const[k,v] of Object.entries(dutyOverrides)) {
+                if(!dayDataMap.has(k)){const[y,m,d]=k.split('-').map(Number);dayDataMap.set(k,{date:new Date(y,m-1,d),events:[],allEvents:[],holiday:null,teacherDuty:null,baseDuty:null,isOverridden:false,baseEvents:[]});}
+                const dd=dayDataMap.get(k); dd.isDutyOverridden=true;
+                if(v && v.trim()) dd.teacherDuty={date:dd.date,teacher:v.trim()};
+                else dd.teacherDuty=null;
             }
 
-            return { dayDataMap, multiDayEvents };
+            const {multiDayEvents,processedEventIds} = findAndProcessMultiDayEvents(dayDataMap);
+            // 필터링 전 allEvents 보존 (모달 편집용)
+            for(const[k,dd] of dayDataMap.entries()) { dd.allEvents=[...dd.events]; dd.events=dd.events.filter(e=>!processedEventIds.has(`${k}_${e.fullTitle}`)); }
+            return {dayDataMap,multiDayEvents};
         };
-        // --- END: utils/dataProcessor.ts ---
 
-        // --- START: components/ConfirmModal.tsx ---
-        const ConfirmModal = ({ isOpen, message, onConfirm, onCancel, confirmText = "확인", cancelText = "취소", isDanger = false }) => {
-            if (!isOpen) return null;
+        // === Icons ===
+        const XMarkIcon=(p)=><svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" {...p}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>;
+        const PlusIcon=(p)=><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" {...p}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4"/></svg>;
+        const PencilIcon=(p)=><svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" {...p}><path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/></svg>;
+        const TrashIcon=(p)=><svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" {...p}><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>;
+        const RefreshIcon=(p)=><svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" {...p}><path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>;
+        const ChevronLeftIcon=(p)=><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} {...p}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7"/></svg>;
+        const ChevronRightIcon=(p)=><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} {...p}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7"/></svg>;
 
-            return (
-                <div 
-                    className="fixed inset-0 bg-black/50 z-[60] flex justify-center items-center p-4"
-                    onClick={onCancel}
-                >
-                    <div 
-                        className="bg-white rounded-lg shadow-xl w-full max-w-sm p-6 flex flex-col items-center text-center animate-fade-in"
-                        onClick={(e) => e.stopPropagation()}
-                    >
-                        <div className={`mb-4 p-3 rounded-full ${isDanger ? 'bg-red-100 text-red-600' : 'bg-blue-100 text-blue-600'}`}>
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                            </svg>
-                        </div>
-                        <h3 className="text-lg font-bold text-slate-800 mb-2">확인 필요</h3>
-                        <p className="text-slate-600 text-sm mb-6 whitespace-pre-wrap">{message}</p>
-                        <div className="flex gap-3 w-full">
-                            <button 
-                                onClick={onCancel}
-                                className="flex-1 px-4 py-2 bg-slate-100 text-slate-700 font-medium rounded-lg hover:bg-slate-200 transition-colors"
-                            >
-                                {cancelText}
-                            </button>
-                            <button 
-                                onClick={onConfirm}
-                                className={`flex-1 px-4 py-2 text-white font-medium rounded-lg transition-colors shadow-sm ${isDanger ? 'bg-red-500 hover:bg-red-600' : 'bg-blue-500 hover:bg-blue-600'}`}
-                            >
-                                {confirmText}
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            );
-        };
-        // --- END: components/ConfirmModal.tsx ---
-
-        // --- START: components/EventModal.tsx ---
-        const XMarkIcon = (props) => (
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" {...props}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-        );
-
-        const PlusIcon = (props) => (
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" {...props}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-            </svg>
-        );
-
-        const PencilIcon = (props) => (
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" {...props}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-            </svg>
-        );
-
-        const TrashIcon = (props) => (
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" {...props}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-            </svg>
-        );
-
-        const EventModal = ({ dayData, onClose, onSaveUserEvents, userModifiedEvents, onResetDate }) => {
-            const { date, events, holiday, teacherDuty, isUserModified } = dayData;
+        /* [수정2] EventModal: 모든 이벤트(내장+추가) 편집 가능 + 기본값 복원 */
+        const EventModal = ({dayData, onClose, onSaveOverride, onRemoveOverride, onSaveDutyOverride, onRemoveDutyOverride}) => {
+            const {date, events, allEvents, holiday, teacherDuty, baseEvents, isOverridden, baseDuty, isDutyOverridden} = dayData;
+            const displayEvents = allEvents || events;
             const dateKey = formatDateKey(date);
-            const formattedDate = `${date.getFullYear()}년 ${date.getMonth() + 1}월 ${date.getDate()}일`;
-            
-            const [editingEvents, setEditingEvents] = useState(() => {
-                return events.map(e => e.fullTitle);
-            });
-            
-            // 특별 행사(Duty) 편집 상태 추가
-            const [editingDuty, setEditingDuty] = useState(() => {
-                return teacherDuty ? teacherDuty.teacher : '';
-            });
-
+            const [isEditing, setIsEditing] = useState(false);
+            const [editingEvents, setEditingEvents] = useState([]);
             const [newEventText, setNewEventText] = useState('');
             const [editingIndex, setEditingIndex] = useState(null);
             const [editingText, setEditingText] = useState('');
-            const [showResetConfirm, setShowResetConfirm] = useState(false);
+            const [isDutyEditing, setIsDutyEditing] = useState(false);
+            const [dutyText, setDutyText] = useState('');
+            const formattedDate = `${date.getFullYear()}년 ${date.getMonth()+1}월 ${date.getDate()}일`;
 
-            const handleAddEvent = () => {
-                if (newEventText.trim()) {
-                    setEditingEvents([...editingEvents, newEventText.trim()]);
-                    setNewEventText('');
-                }
-            };
-
-            const handleDeleteEvent = (index) => {
-                const newEvents = editingEvents.filter((_, i) => i !== index);
-                setEditingEvents(newEvents);
-            };
-
-            const handleStartEditEvent = (index) => {
-                setEditingIndex(index);
-                setEditingText(editingEvents[index]);
-            };
-
-            const handleSaveEditEvent = () => {
-                if (editingText.trim()) {
-                    const newEvents = [...editingEvents];
-                    newEvents[editingIndex] = editingText.trim();
-                    setEditingEvents(newEvents);
-                }
-                setEditingIndex(null);
-                setEditingText('');
-            };
-
-            const handleCancelEditEvent = () => {
-                setEditingIndex(null);
-                setEditingText('');
-            };
-
-            // 저장 시 이벤트와 특별 행사 모두 전달
-            const handleSave = () => {
-                onSaveUserEvents(dateKey, editingEvents, editingDuty);
-                onClose();
-            };
-            
-            const handleResetConfirm = () => {
-                onResetDate(dateKey);
-                onClose();
-            }
+            const startEditing = () => { setEditingEvents(displayEvents.map(e=>e.fullTitle)); setIsEditing(true); };
+            const handleAddEvent = () => { if(newEventText.trim()){setEditingEvents([...editingEvents,newEventText.trim()]);setNewEventText('');} };
+            const handleDeleteEvent = (i) => setEditingEvents(editingEvents.filter((_,idx)=>idx!==i));
+            const handleStartEdit = (i) => { setEditingIndex(i); setEditingText(editingEvents[i]); };
+            const handleSaveEdit = () => { if(editingText.trim()){const n=[...editingEvents];n[editingIndex]=editingText.trim();setEditingEvents(n);} setEditingIndex(null);setEditingText(''); };
+            const handleCancelEdit = () => { setEditingIndex(null);setEditingText(''); };
+            const handleSave = () => { onSaveOverride(dateKey, editingEvents); setIsEditing(false); };
+            const handleCancel = () => { setIsEditing(false);setNewEventText('');setEditingIndex(null); };
+            const handleRestore = () => { if(window.confirm('이 날짜의 일정을 기본값(CSV 원본)으로 복원하시겠습니까?')){onRemoveOverride(dateKey);setIsEditing(false);} };
 
             return (
-                <div 
-                    className="fixed inset-0 bg-black/50 z-50 flex justify-center items-center p-4"
-                    onClick={onClose}
-                >
-                    <div 
-                        className="bg-white rounded-lg shadow-xl w-full max-w-md max-h-[85vh] flex flex-col"
-                        onClick={(e) => e.stopPropagation()}
-                    >
-                        <header className="p-4 border-b border-slate-200 flex justify-between items-center bg-slate-50 rounded-t-lg">
+                <div className="fixed inset-0 bg-black/50 z-50 flex justify-center items-center p-4" onClick={onClose}>
+                    <div className="bg-white rounded-lg shadow-xl w-full max-w-md max-h-[85vh] flex flex-col" onClick={e=>e.stopPropagation()}>
+                        <header className="p-4 border-b border-slate-200 flex justify-between items-center">
                             <div>
                                 <h2 className="text-lg font-bold text-slate-800">{formattedDate}</h2>
-                                {isUserModified && <span className="text-xs text-blue-600 font-medium">사용자 수정됨</span>}
+                                {(isOverridden || isDutyOverridden) && !isEditing && !isDutyEditing && <span className="text-xs text-orange-600 font-medium">✏️ 사용자 수정됨</span>}
                             </div>
-                            <button onClick={onClose} className="p-1 rounded-full text-slate-400 hover:bg-slate-200 transition-colors">
-                                <XMarkIcon />
-                            </button>
+                            <button onClick={onClose} className="p-1 rounded-full text-slate-400 hover:bg-slate-100"><XMarkIcon/></button>
                         </header>
-                        
                         <div className="flex-grow p-4 overflow-y-auto space-y-4">
-                            {holiday && (
-                                <div className="mb-4">
-                                    <h3 className="font-semibold text-slate-700 text-sm mb-1 uppercase tracking-wider">공휴일</h3>
-                                    <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
-                                        <p className="font-bold text-red-700">{holiday.name}</p>
-                                    </div>
-                                </div>
-                            )}
+                            {holiday && <div><h3 className="font-semibold text-slate-700 text-sm mb-1 uppercase tracking-wider">공휴일</h3><div className="p-3 bg-red-50 border border-red-200 rounded-lg"><p className="font-bold text-red-700">{holiday.name}</p></div></div>}
 
                             <div>
-                                <h3 className="font-semibold text-slate-700 text-sm mb-2 uppercase tracking-wider flex justify-between items-center">
-                                    일정 목록 (수정 가능)
-                                </h3>
-                                
-                                <div className="space-y-2 mb-4">
-                                    {editingEvents.length > 0 ? (
-                                        <ul className="space-y-2">
-                                            {editingEvents.map((eventText, index) => (
-                                                <li key={index} className="flex items-center gap-2 bg-slate-50 p-2 rounded-lg border border-slate-200 group hover:border-blue-300 transition-colors">
-                                                    {editingIndex === index ? (
-                                                        <>
-                                                            <input 
-                                                                type="text"
-                                                                value={editingText}
-                                                                onChange={(e) => setEditingText(e.target.value)}
-                                                                className="flex-1 px-2 py-1 border border-blue-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                                                autoFocus
-                                                                onKeyPress={(e) => e.key === 'Enter' && handleSaveEditEvent()}
-                                                            />
-                                                            <button onClick={handleSaveEditEvent} className="p-1 bg-green-500 text-white rounded hover:bg-green-600">
-                                                                <span className="text-xs px-1">확인</span>
-                                                            </button>
-                                                            <button onClick={handleCancelEditEvent} className="p-1 bg-slate-300 text-slate-700 rounded hover:bg-slate-400">
-                                                                <XMarkIcon className="h-4 w-4"/>
-                                                            </button>
-                                                        </>
-                                                    ) : (
-                                                        <>
-                                                            <span className="flex-1 text-sm text-slate-700">{eventText}</span>
-                                                            <div className="flex gap-1 opacity-100 sm:opacity-0 group-hover:opacity-100 transition-opacity">
-                                                                <button 
-                                                                    onClick={() => handleStartEditEvent(index)}
-                                                                    className="p-1.5 text-blue-600 hover:bg-blue-100 rounded"
-                                                                    title="수정"
-                                                                >
-                                                                    <PencilIcon />
-                                                                </button>
-                                                                <button 
-                                                                    onClick={() => handleDeleteEvent(index)}
-                                                                    className="p-1.5 text-red-600 hover:bg-red-100 rounded"
-                                                                    title="삭제"
-                                                                >
-                                                                    <TrashIcon />
-                                                                </button>
-                                                            </div>
-                                                        </>
-                                                    )}
+                                <div className="flex justify-between items-center mb-2">
+                                    <h3 className="font-semibold text-slate-700 text-sm uppercase tracking-wider">일정</h3>
+                                    <div className="flex gap-1">
+                                        {isOverridden && !isEditing && <button onClick={handleRestore} className="flex items-center gap-1 px-2 py-1 bg-orange-100 text-orange-700 text-xs font-medium rounded-lg hover:bg-orange-200 transition-colors" title="기본값으로 복원"><RefreshIcon/>기본값 복원</button>}
+                                        {!isEditing && <button onClick={startEditing} className="flex items-center gap-1 px-3 py-1 bg-blue-100 text-blue-700 text-sm font-medium rounded-lg hover:bg-blue-200 transition-colors"><PencilIcon/>편집</button>}
+                                    </div>
+                                </div>
+
+                                {isEditing ? (
+                                    <div className="space-y-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                                        {editingEvents.length > 0 ? (
+                                            <ul className="space-y-2">{editingEvents.map((txt,i) => (
+                                                <li key={i} className="flex items-center gap-2">
+                                                    {editingIndex===i ? (<>
+                                                        <input type="text" value={editingText} onChange={e=>setEditingText(e.target.value)} onKeyPress={e=>e.key==='Enter'&&handleSaveEdit()} className="flex-1 px-2 py-1 border border-blue-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" autoFocus/>
+                                                        <button onClick={handleSaveEdit} className="px-2 py-1 bg-green-500 text-white text-xs rounded hover:bg-green-600">확인</button>
+                                                        <button onClick={handleCancelEdit} className="px-2 py-1 bg-slate-300 text-slate-700 text-xs rounded hover:bg-slate-400">취소</button>
+                                                    </>) : (<>
+                                                        <span className="flex-1 p-2 bg-white rounded-lg text-sm border border-blue-100">{txt}</span>
+                                                        <button onClick={()=>handleStartEdit(i)} className="p-1.5 text-blue-600 hover:bg-blue-100 rounded" title="수정"><PencilIcon/></button>
+                                                        <button onClick={()=>handleDeleteEvent(i)} className="p-1.5 text-red-600 hover:bg-red-100 rounded" title="삭제"><TrashIcon/></button>
+                                                    </>)}
                                                 </li>
-                                            ))}
-                                        </ul>
-                                    ) : (
-                                        <div className="text-center py-6 text-slate-400 text-sm bg-slate-50 rounded-lg border border-dashed border-slate-300">
-                                            등록된 일정이 없습니다.
+                                            ))}</ul>
+                                        ) : <p className="text-sm text-slate-400 text-center py-2">일정이 없습니다. 아래에서 추가하세요.</p>}
+                                        <div className="flex items-center gap-2 pt-2 border-t border-blue-200">
+                                            <input type="text" value={newEventText} onChange={e=>setNewEventText(e.target.value)} onKeyPress={e=>e.key==='Enter'&&handleAddEvent()} placeholder="새 일정 입력..." className="flex-1 px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"/>
+                                            <button onClick={handleAddEvent} disabled={!newEventText.trim()} className="flex items-center gap-1 px-3 py-2 bg-green-500 text-white text-sm font-medium rounded-lg hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"><PlusIcon/>추가</button>
                                         </div>
-                                    )}
-                                </div>
-
-                                <div className="flex items-center gap-2 mb-2">
-                                    <input 
-                                        type="text"
-                                        value={newEventText}
-                                        onChange={(e) => setNewEventText(e.target.value)}
-                                        onKeyPress={(e) => e.key === 'Enter' && handleAddEvent()}
-                                        placeholder="새 일정 추가..."
-                                        className="flex-1 px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                    />
-                                    <button 
-                                        onClick={handleAddEvent}
-                                        disabled={!newEventText.trim()}
-                                        className="flex items-center gap-1 px-3 py-2 bg-blue-500 text-white text-sm font-medium rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                                    >
-                                        <PlusIcon />
-                                        추가
-                                    </button>
-                                </div>
+                                        <div className="flex gap-2 pt-2">
+                                            <button onClick={handleSave} className="flex-1 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors">저장</button>
+                                            <button onClick={handleCancel} className="flex-1 px-4 py-2 bg-slate-300 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-400 transition-colors">취소</button>
+                                        </div>
+                                        {baseEvents && baseEvents.length > 0 && <button onClick={()=>setEditingEvents([...baseEvents])} className="w-full flex items-center justify-center gap-1 px-3 py-1.5 bg-orange-50 text-orange-600 text-xs font-medium rounded-lg hover:bg-orange-100 transition-colors border border-orange-200"><RefreshIcon/>CSV 기본값으로 되돌리기</button>}
+                                    </div>
+                                ) : (
+                                    displayEvents.length > 0 ? (
+                                        <ul className="space-y-2">{displayEvents.map((ev,i)=><li key={i} className={`p-2 rounded-lg text-sm font-medium ${ev.color}`}>{ev.fullTitle}</li>)}</ul>
+                                    ) : (
+                                        <div className="text-center py-4 text-slate-400 text-sm bg-slate-50 rounded-lg border border-dashed border-slate-300">등록된 일정이 없습니다.<br/><span className="text-blue-600">"편집" 버튼</span>을 눌러 일정을 추가하세요.</div>
+                                    )
+                                )}
                             </div>
 
-                            {/* 특별 행사 / 지도 교사 편집 영역 */}
-                             <div className="mt-4 pt-4 border-t border-slate-200">
-                                <h3 className="font-semibold text-slate-700 text-sm mb-1 uppercase tracking-wider">특별 행사 / 지도 교사 (수정 가능)</h3>
-                                <div className="p-1">
-                                    <input 
-                                        type="text"
-                                        value={editingDuty}
-                                        onChange={(e) => setEditingDuty(e.target.value)}
-                                        placeholder="특별 행사나 지도교사 정보를 입력하세요"
-                                        className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-800 font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 transition-shadow"
-                                    />
+                            <div>
+                                <div className="flex justify-between items-center mb-2">
+                                    <h3 className="font-semibold text-slate-700 text-sm uppercase tracking-wider">특별 행사 / 지도 교사</h3>
+                                    <div className="flex gap-1">
+                                        {isDutyOverridden && !isDutyEditing && <button onClick={()=>{onRemoveDutyOverride(dateKey);}} className="flex items-center gap-1 px-2 py-1 bg-orange-100 text-orange-700 text-xs font-medium rounded-lg hover:bg-orange-200 transition-colors" title="기본값으로 복원"><RefreshIcon/>기본값 복원</button>}
+                                        {!isDutyEditing && <button onClick={()=>{setDutyText(teacherDuty?teacherDuty.teacher:'');setIsDutyEditing(true);}} className="flex items-center gap-1 px-3 py-1 bg-blue-100 text-blue-700 text-sm font-medium rounded-lg hover:bg-blue-200 transition-colors"><PencilIcon/>편집</button>}
+                                    </div>
                                 </div>
+                                {isDutyEditing ? (
+                                    <div className="space-y-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                                        <input type="text" value={dutyText} onChange={e=>setDutyText(e.target.value)} onKeyPress={e=>{if(e.key==='Enter'){onSaveDutyOverride(dateKey,dutyText);setIsDutyEditing(false);}}} placeholder="지도 교사 이름 (비우면 삭제)" className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"/>
+                                        <div className="flex gap-2">
+                                            <button onClick={()=>{onSaveDutyOverride(dateKey,dutyText);setIsDutyEditing(false);}} className="flex-1 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors">저장</button>
+                                            <button onClick={()=>setIsDutyEditing(false)} className="flex-1 px-4 py-2 bg-slate-300 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-400 transition-colors">취소</button>
+                                        </div>
+                                        {baseDuty && <button onClick={()=>setDutyText(baseDuty)} className="w-full flex items-center justify-center gap-1 px-3 py-1.5 bg-orange-50 text-orange-600 text-xs font-medium rounded-lg hover:bg-orange-100 transition-colors border border-orange-200"><RefreshIcon/>CSV 기본값으로 되돌리기</button>}
+                                    </div>
+                                ) : (
+                                    teacherDuty ? (
+                                        <div className="p-3 bg-slate-100 border border-slate-200 rounded-lg">
+                                            <p className="text-slate-800 font-medium">{teacherDuty.teacher}</p>
+                                            {isDutyOverridden && <span className="text-xs text-orange-600 font-medium">✏️ 사용자 수정됨</span>}
+                                        </div>
+                                    ) : (
+                                        <div className="text-center py-3 text-slate-400 text-sm bg-slate-50 rounded-lg border border-dashed border-slate-300">등록된 지도 교사가 없습니다.<br/><span className="text-blue-600">"편집" 버튼</span>을 눌러 추가하세요.</div>
+                                    )
+                                )}
                             </div>
                         </div>
-                        
-                        <footer className="p-4 bg-slate-50 border-t border-slate-200 flex justify-between items-center rounded-b-lg">
-                            {isUserModified ? (
-                                <button
-                                    onClick={() => setShowResetConfirm(true)}
-                                    className="text-xs text-red-600 hover:text-red-800 underline underline-offset-2"
-                                >
-                                    기본 일정으로 초기화
-                                </button>
-                            ) : (
-                                <div></div>
-                            )}
-                            <div className="flex gap-2">
-                                <button 
-                                    onClick={onClose}
-                                    className="px-4 py-2 bg-white border border-slate-300 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-50 transition-colors"
-                                >
-                                    취소
-                                </button>
-                                <button 
-                                    onClick={handleSave}
-                                    className="px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 shadow-sm transition-colors"
-                                >
-                                    저장 완료
-                                </button>
-                            </div>
-                        </footer>
-                    </div>
-
-                    <ConfirmModal
-                        isOpen={showResetConfirm}
-                        message="이 날짜의 모든 수정사항(일정 및 특별행사)을 초기화하고 기본 데이터로 되돌리시겠습니까?"
-                        onConfirm={handleResetConfirm}
-                        onCancel={() => setShowResetConfirm(false)}
-                        confirmText="초기화"
-                        isDanger={true}
-                    />
-                </div>
-            );
-        };
-        // --- END: components/EventModal.tsx ---
-
-        // --- START: components/Header.tsx ---
-        const ChevronLeftIcon = (props) => (
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} {...props}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-            </svg>
-        );
-
-        const ChevronRightIcon = (props) => (
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} {...props}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-            </svg>
-        );
-
-        const MiniCalendar = ({ date, startOfWeek }) => {
-            const monthStart = startOfMonth(date);
-            const monthEnd = endOfMonth(date);
-            const calendarStart = dateFnsStartOfWeek(monthStart, { weekStartsOn: startOfWeek });
-            const calendarEnd = endOfWeek(monthEnd, { weekStartsOn: startOfWeek });
-            const days = eachDayOfInterval({ start: calendarStart, end: calendarEnd });
-
-            let dayHeaders = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
-            if (startOfWeek === 1) {
-                dayHeaders.push(dayHeaders.shift()); 
-            }
-
-            return (
-                <div className="w-48">
-                    <h3 className="text-center font-semibold text-sm mb-2 text-slate-700">{format(date, 'MMMM yyyy')}</h3>
-                    <div className="grid grid-cols-7 text-center text-xs text-slate-500">
-                        {dayHeaders.map(day => <div key={day} className="h-4 flex items-center justify-center">{day}</div>)}
-                    </div>
-                    <div className="grid grid-cols-7 text-center text-xs mt-1">
-                        {days.map(day => {
-                            const dayOfWeek = day.getDay();
-                            const isCurrentMonth = isSameMonth(day, date);
-
-                            let textColor = 'text-slate-600';
-                            if (!isCurrentMonth) {
-                                textColor = 'text-slate-300';
-                            } else if (dayOfWeek === 0) { // Sunday
-                                textColor = 'text-red-500';
-                            } else if (dayOfWeek === 6) { // Saturday
-                                textColor = 'text-blue-500';
-                            }
-
-                            return (
-                                <div
-                                    key={day.toString()}
-                                    className={`
-                                        w-6 h-4 flex items-center justify-center rounded-full
-                                        ${isToday(day) ? 'bg-blue-600 text-white shadow-md' : textColor}
-                                    `}
-                                >
-                                    {format(day, 'd')}
-                                </div>
-                            );
-                        })}
+                        <footer className="p-3 bg-slate-50 border-t border-slate-200 text-right"><button onClick={onClose} className="px-4 py-2 bg-slate-600 text-white text-sm font-semibold rounded-lg hover:bg-slate-700">닫기</button></footer>
                     </div>
                 </div>
             );
         };
 
-        const Header = ({ viewDate, setViewDate, startOfWeek, setStartOfWeek, onReset, onShowDataModal, schoolName, schoolLogo }) => {
-            const currentYear = viewDate.getFullYear();
-            const currentMonth = viewDate.getMonth();
+        // === MiniCalendar ===
+        const MiniCalendar = ({date, startOfWeek}) => {
+            const ms=startOfMonth(date),me=endOfMonth(date),cs=dateFnsStartOfWeek(ms,{weekStartsOn:startOfWeek}),ce=endOfWeek(me,{weekStartsOn:startOfWeek});
+            const days=eachDayOfInterval({start:cs,end:ce}); let dh=['S','M','T','W','T','F','S']; if(startOfWeek===1)dh.push(dh.shift());
+            return(<div className="w-48"><h3 className="text-center font-semibold text-sm mb-2 text-slate-700">{format(date,'MMMM yyyy')}</h3>
+            <div className="grid grid-cols-7 text-center text-xs text-slate-500">{dh.map(d=><div key={d} className="h-4 flex items-center justify-center">{d}</div>)}</div>
+            <div className="grid grid-cols-7 text-center text-xs mt-1">{days.map(d=>{const dw=d.getDay(),cm=isSameMonth(d,date);let tc='text-slate-600';if(!cm)tc='text-slate-300';else if(dw===0)tc='text-red-500';else if(dw===6)tc='text-blue-500';return(<div key={d.toString()} className={`w-6 h-4 flex items-center justify-center rounded-full ${isToday(d)?'bg-blue-600 text-white shadow-md':tc}`}>{format(d,'d')}</div>);})}</div></div>);
+        };
 
-            const goToPreviousMonth = () => setViewDate(new Date(currentYear, currentMonth - 1, 1));
-            const goToNextMonth = () => setViewDate(new Date(currentYear, currentMonth + 1, 1));
-            const goToToday = () => setViewDate(new Date());
-
-            const prevMonth = new Date(currentYear, currentMonth - 1, 1);
-            const nextMonth = new Date(currentYear, currentMonth + 1, 1);
-            
-            const selectBaseClasses = "bg-white text-slate-700 text-sm border-gray-300 rounded-md shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50";
-            const buttonBaseClasses = `px-3 py-2 border border-gray-300 bg-white text-slate-700 text-sm font-medium rounded-md shadow-sm hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500`;
-
-            return (
+        // === Header ===
+        const Header = ({viewDate, setViewDate, startOfWeek, setStartOfWeek, onReset, onShowDataModal, schoolName, schoolLogo}) => {
+            const cy=viewDate.getFullYear(),cm=viewDate.getMonth();
+            const prev=()=>setViewDate(new Date(cy,cm-1,1)), next=()=>setViewDate(new Date(cy,cm+1,1)), today=()=>setViewDate(new Date());
+            const pm=new Date(cy,cm-1,1),nm=new Date(cy,cm+1,1);
+            const selCls="bg-white text-slate-700 text-sm border-gray-300 rounded-md shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50";
+            const btnCls="px-3 py-2 border border-gray-300 bg-white text-slate-700 text-sm font-medium rounded-md shadow-sm hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500";
+            return(
                 <header className="bg-white shadow-sm sticky top-0 z-20">
-                     <div className="p-2 flex justify-between items-center gap-4">
-                        <div className="hidden lg:block">
-                            <MiniCalendar date={prevMonth} startOfWeek={startOfWeek} />
-                        </div>
+                    <div className="p-2 flex justify-between items-center gap-4">
+                        <div className="hidden lg:block"><MiniCalendar date={pm} startOfWeek={startOfWeek}/></div>
                         <div className="text-center p-4 sm:p-6 rounded-xl shadow-lg bg-gradient-to-r from-sky-500 to-indigo-600 text-white select-none flex-grow">
                             <h1 className="text-2xl sm:text-3xl font-bold">스마트 스쿨 캘린더</h1>
-                            <p className="text-sm sm:text-base mt-1">{schoolName ? schoolName + " " : ""}학사 일정 관리 시스템</p>
+                            <p className="text-sm sm:text-base mt-1">{schoolName?schoolName+" ":""}학사 일정 관리 시스템</p>
                         </div>
-                        <div className="hidden lg:block">
-                            <MiniCalendar date={nextMonth} startOfWeek={startOfWeek} />
-                        </div>
-                     </div>
-
+                        <div className="hidden lg:block"><MiniCalendar date={nm} startOfWeek={startOfWeek}/></div>
+                    </div>
                     <div className="p-2 border-t border-slate-200 flex items-center justify-between flex-wrap gap-2">
-                         <div className="flex items-center gap-2 sm:gap-4">
-                            {schoolLogo ? (
-                                <img src={schoolLogo} alt="School Logo" className="h-8 sm:h-10 object-contain" />
-                            ) : (
-                                <span className="font-bold text-xl text-slate-700">🏫</span>
-                            )}
-                            <button onClick={goToToday} className={buttonBaseClasses}>
-                                오늘
-                            </button>
+                        <div className="flex items-center gap-2 sm:gap-4">
+                            {schoolLogo?<img src={schoolLogo} alt="Logo" className="h-8 sm:h-10 object-contain"/>:<span className="font-bold text-xl text-slate-700">🏫</span>}
+                            <button onClick={today} className={btnCls}>오늘</button>
                         </div>
-                        
                         <div className="flex items-center absolute left-1/2 -translate-x-1/2">
-                            <button onClick={goToPreviousMonth} className="p-2 rounded-full text-slate-500 hover:bg-slate-100 transition-colors">
-                                <ChevronLeftIcon />
-                            </button>
-                            <h2 className="text-lg font-semibold text-slate-800 w-32 text-center">
-                                {`${currentYear}년 ${currentMonth + 1}월`}
-                            </h2>
-                            <button onClick={goToNextMonth} className="p-2 rounded-full text-slate-500 hover:bg-slate-100 transition-colors">
-                                <ChevronRightIcon />
-                            </button>
+                            <button onClick={prev} className="p-2 rounded-full text-slate-500 hover:bg-slate-100 transition-colors"><ChevronLeftIcon/></button>
+                            <h2 className="text-lg font-semibold text-slate-800 w-32 text-center">{`${cy}년 ${cm+1}월`}</h2>
+                            <button onClick={next} className="p-2 rounded-full text-slate-500 hover:bg-slate-100 transition-colors"><ChevronRightIcon/></button>
                         </div>
-                        
                         <div className="flex items-center gap-2">
-                            <select value={startOfWeek} onChange={(e) => setStartOfWeek(Number(e.target.value))} className={selectBaseClasses}>
-                                <option value={0}>일요일 시작</option>
-                                <option value={1}>월요일 시작</option>
-                            </select>
-                            <button 
-                                onClick={onShowDataModal}
-                                className="px-3 py-2 border border-gray-300 bg-blue-50 text-blue-700 text-sm font-medium rounded-md shadow-sm hover:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                            >
-                                데이터 설정
-                            </button>
-                            <button 
-                                onClick={onReset}
-                                className="px-3 py-2 border border-gray-300 bg-red-50 text-red-700 text-sm font-medium rounded-md shadow-sm hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
-                            >
-                                데이터 초기화
-                            </button>
+                            <select value={startOfWeek} onChange={e=>setStartOfWeek(Number(e.target.value))} className={selCls}><option value={0}>일요일 시작</option><option value={1}>월요일 시작</option></select>
+                            <button onClick={onShowDataModal} className="px-3 py-2 border border-gray-300 bg-blue-50 text-blue-700 text-sm font-medium rounded-md shadow-sm hover:bg-blue-100">데이터 설정</button>
+                            <button onClick={onReset} className="px-3 py-2 border border-gray-300 bg-red-50 text-red-700 text-sm font-medium rounded-md shadow-sm hover:bg-red-100">데이터 초기화</button>
                         </div>
                     </div>
                 </header>
             );
         };
-        // --- END: components/Header.tsx ---
 
-        // --- START: components/Calendar.tsx ---
-        const DayCell = ({ date, dayData, isToday, isCurrentMonth, reservedHeight, onClick }) => {
-            const dayNumber = date.getDate();
-            const dayOfWeek = date.getDay();
-
-            const dayNumberColor = dayData?.holiday ? 'text-red-500' :
-                dayOfWeek === 0 ? 'text-red-500' :
-                dayOfWeek === 6 ? 'text-blue-500' :
-                isCurrentMonth ? 'text-slate-700' : 'text-slate-400';
-
-            const singleDayEvents = dayData?.events || [];
-            // [변경] 숨김 처리된 이벤트(멀티데이의 일부)는 셀 내부 렌더링에서 제외
-            const visibleEvents = singleDayEvents.filter(e => !e.isHidden);
-
-            const displayableItems = [];
-            
-            const MAX_ITEMS_IN_CELL = 3;
-            let remainingSlots = MAX_ITEMS_IN_CELL;
-            
-            if (dayData?.holiday) {
-                displayableItems.push({ type: 'holiday', content: dayData.holiday });
-                remainingSlots--;
-            }
-            
-            visibleEvents.forEach(event => {
-                if (remainingSlots > 0) {
-                    displayableItems.push({ type: 'event', content: event });
-                    remainingSlots--;
-                }
-            });
-            
-            const totalItems = (dayData?.holiday ? 1 : 0) + visibleEvents.length;
-            const displayedCount = displayableItems.length;
-            const moreItemsCount = totalItems - displayedCount;
-            const hasMoreItems = moreItemsCount > 0;
-
-            const isUserModified = dayData?.isUserModified;
-
-            return (
-                <div
-                    className={`border-b border-r border-slate-300 flex flex-col relative transition-all duration-200 cursor-pointer ${isCurrentMonth ? 'bg-gradient-to-br from-white to-slate-50' : 'bg-gradient-to-br from-slate-50/80 to-slate-100/60'} hover:shadow-md hover:border-blue-300 group`}
-                    style={{
-                        boxShadow: isCurrentMonth 
-                            ? 'inset 1px 1px 0 rgba(255,255,255,0.9), inset -1px -1px 0 rgba(0,0,0,0.05), 0 3px 8px rgba(59,130,246,0.12)' 
-                            : 'inset 1px 1px 0 rgba(255,255,255,0.6), inset -1px -1px 0 rgba(0,0,0,0.02), 0 2px 4px rgba(0,0,0,0.05)',
-                    }}
-                    onClick={() => onClick(dayData || { date, events: [], holiday: null, teacherDuty: null, isUserModified: false })}
-                >
-                    <div className="flex-shrink-0 p-1 text-center relative">
-                        <div className={`text-sm font-bold mx-auto transition-all duration-150 ${dayNumberColor} ${isToday ? 'bg-gradient-to-b from-blue-500 to-blue-700 text-white rounded-full w-7 h-7 flex items-center justify-center shadow-lg shadow-blue-400/40' : 'w-7 h-7 flex items-center justify-center'}`}
-                             style={!isToday && isCurrentMonth ? {
-                                textShadow: '0 1px 2px rgba(0,0,0,0.1)',
-                                fontWeight: '600'
-                             } : {}}>
-                            {dayNumber}
-                        </div>
-                        {isUserModified && (
-                            <div className="absolute top-1 right-1 text-[10px]" title="사용자 수정됨">
-                                ✏️
-                            </div>
-                        )}
+        // === DayCell ===
+        const DayCell = ({date, dayData, isToday:isTodayFlag, isCurrentMonth, reservedHeight, onClick}) => {
+            const dn=date.getDate(),dw=date.getDay();
+            const dnc=dayData?.holiday?'text-red-500':dw===0?'text-red-500':dw===6?'text-blue-500':isCurrentMonth?'text-slate-700':'text-slate-400';
+            const MAX=3,evts=dayData?.events||[],items=[];let rem=MAX;
+            if(dayData?.holiday){items.push({type:'holiday',content:dayData.holiday});rem--;}
+            evts.forEach(e=>{if(rem>0){items.push({type:'event',content:e});rem--;}});
+            const total=(dayData?.holiday?1:0)+evts.length,more=total-items.length;
+            return(
+                <div className={`border-b border-r border-slate-300 flex flex-col relative transition-all duration-200 cursor-pointer ${isCurrentMonth?'bg-gradient-to-br from-white to-slate-50':'bg-gradient-to-br from-slate-50/80 to-slate-100/60'} hover:shadow-md hover:border-blue-300`}
+                    style={{boxShadow:isCurrentMonth?'inset 1px 1px 0 rgba(255,255,255,0.9), inset -1px -1px 0 rgba(0,0,0,0.05), 0 3px 8px rgba(59,130,246,0.12)':'inset 1px 1px 0 rgba(255,255,255,0.6), inset -1px -1px 0 rgba(0,0,0,0.02), 0 2px 4px rgba(0,0,0,0.05)'}}
+                    onClick={()=>onClick(dayData||{date,events:[],allEvents:[],holiday:null,teacherDuty:null,baseDuty:null,isDutyOverridden:false,isOverridden:false,baseEvents:[]})}>
+                    <div className="flex-shrink-0 p-1 text-center">
+                        <div className={`text-sm font-bold mx-auto transition-all duration-150 ${dnc} ${isTodayFlag?'bg-gradient-to-b from-blue-500 to-blue-700 text-white rounded-full w-7 h-7 flex items-center justify-center shadow-lg shadow-blue-400/40':'w-7 h-7 flex items-center justify-center'}`}
+                             style={!isTodayFlag&&isCurrentMonth?{textShadow:'0 1px 2px rgba(0,0,0,0.1)',fontWeight:'600'}:{}}>{dn}</div>
+                        {(dayData?.isOverridden || dayData?.isDutyOverridden) && <div className="absolute top-1 right-1 text-xs" title="사용자 수정됨">✏️</div>}
                     </div>
                     <div className="flex-grow overflow-y-auto px-1 pb-1 space-y-1">
-                        <div style={{ height: reservedHeight }} aria-hidden="true" /> 
-                         {displayableItems.map((item, index) => {
-                            if (item.type === 'holiday') {
-                                return (
-                                     <div key={`item-${index}`} className="text-xs rounded px-1.5 py-0.5 whitespace-nowrap overflow-hidden text-ellipsis bg-gradient-to-b from-red-100 to-red-50 text-red-700 font-medium shadow-sm border border-red-200/50"
-                                          style={{boxShadow: '0 2px 4px rgba(239,68,68,0.15), inset 0 1px 0 rgba(255,255,255,0.8)'}}>
-                                        {item.content.name}
-                                    </div>
-                                )
-                            }
-                            if (item.type === 'event') {
-                                const event = item.content;
-                                return (
-                                    <div key={`item-${index}`} className={`text-xs rounded px-1.5 py-0.5 whitespace-nowrap overflow-hidden text-ellipsis ${event.color} font-medium shadow-sm border border-opacity-30 ${isUserModified ? 'ring-1 ring-blue-300 ring-offset-0' : ''}`}
-                                         style={{boxShadow: '0 2px 4px rgba(0,0,0,0.1), inset 0 1px 0 rgba(255,255,255,0.6)'}}>
-                                        {event.title}
-                                    </div>
-                                )
-                            }
+                        <div style={{height:reservedHeight}} aria-hidden="true"/>
+                        {items.map((it,i)=>{
+                            if(it.type==='holiday') return <div key={i} className="text-xs rounded px-1.5 py-0.5 whitespace-nowrap overflow-hidden text-ellipsis bg-gradient-to-b from-red-100 to-red-50 text-red-700 font-medium shadow-sm border border-red-200/50" style={{boxShadow:'0 2px 4px rgba(239,68,68,0.15), inset 0 1px 0 rgba(255,255,255,0.8)'}}>{it.content.name}</div>;
+                            if(it.type==='event') return <div key={i} className={`text-xs rounded px-1.5 py-0.5 whitespace-nowrap overflow-hidden text-ellipsis ${it.content.color} font-medium shadow-sm border border-opacity-30`} style={{boxShadow:'0 2px 4px rgba(0,0,0,0.1), inset 0 1px 0 rgba(255,255,255,0.6)'}}>{it.content.title}</div>;
                             return null;
                         })}
-                        {hasMoreItems && (
-                            <div className="text-xs text-slate-500 font-medium px-1.5 py-0.5">
-                                + {moreItemsCount} more
-                            </div>
-                        )}
+                        {more>0 && <div className="text-xs text-slate-500 font-medium px-1.5 py-0.5">+ {more} more</div>}
                     </div>
-                    {dayData?.teacherDuty && (
-                        <div className="flex-shrink-0 p-1 text-center text-xs font-medium text-slate-600 truncate border-t border-slate-200 mt-1 bg-gradient-to-r from-slate-50/50 to-slate-50"
-                             style={{boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.8)'}}>
-                            {dayData.teacherDuty.teacher}
-                        </div>
-                    )}
+                    {dayData?.teacherDuty && <div className="flex-shrink-0 p-1 text-center text-xs font-medium text-slate-600 truncate border-t border-slate-200 mt-1 bg-gradient-to-r from-slate-50/50 to-slate-50" style={{boxShadow:'inset 0 1px 0 rgba(255,255,255,0.8)'}}>{dayData.teacherDuty.teacher}</div>}
                 </div>
             );
         };
 
-        const Calendar = ({ viewDate, startOfWeek: startOfWeekProp, calendarData, onDayClick }) => {
-            const year = viewDate.getFullYear();
-            const month = viewDate.getMonth();
-
-            const firstDayOfMonth = new Date(year, month, 1);
-            const lastDayOfMonth = new Date(year, month + 1, 0);
-
-            const startDate = new Date(firstDayOfMonth);
-            const startDayOfWeek = firstDayOfMonth.getDay();
-            const diff = (startDayOfWeek - startOfWeekProp + 7) % 7;
-            startDate.setDate(startDate.getDate() - diff);
-
-            const endDate = new Date(lastDayOfMonth);
-            const endDayOfWeek = lastDayOfMonth.getDay();
-            const endDiff = (6 - (endDayOfWeek - startOfWeekProp + 7) % 7);
-            endDate.setDate(endDate.getDate() + endDiff);
-
-            const weeks = [];
-            let currentWeek = [];
-            let currentDate = new Date(startDate);
-            
-            while (currentDate <= endDate) {
-                currentWeek.push(new Date(currentDate));
-                if (currentWeek.length === 7) {
-                    weeks.push(currentWeek);
-                    currentWeek = [];
-                }
-                currentDate.setDate(currentDate.getDate() + 1);
-            }
-             if (currentWeek.length > 0) {
-                weeks.push(currentWeek);
-            }
-
-            const dayHeaders = ['일', '월', '화', '수', '목', '금', '토'];
-            if (startOfWeekProp === 1) {
-                dayHeaders.push(dayHeaders.shift());
-            }
-
-            const today = new Date();
-            const todayKey = formatDateKey(today);
-
-            const getWeekMultiDayEvents = (week) => {
-                if (!calendarData) return [];
-                const weekStart = week[0];
-                const weekEnd = week[6];
-                weekEnd.setHours(23,59,59,999); 
-                return calendarData.multiDayEvents.filter(event => 
-                    event.start <= weekEnd && event.end >= weekStart
-                );
-            }
-
-            const dayHeaderTopAreaHeight = '1.8rem';
-            const multiDayEventHeight = '1.4rem';
-
-            return (
+        // === Calendar ===
+        const Calendar = ({viewDate, startOfWeek:sow, calendarData, onDayClick}) => {
+            const y=viewDate.getFullYear(),m=viewDate.getMonth();
+            const fd=new Date(y,m,1),ld=new Date(y,m+1,0);
+            const sd=new Date(fd); sd.setDate(sd.getDate()-((fd.getDay()-sow+7)%7));
+            const ed=new Date(ld); ed.setDate(ed.getDate()+(6-(ld.getDay()-sow+7)%7));
+            const weeks=[];let cw=[],cd=new Date(sd);
+            while(cd<=ed){cw.push(new Date(cd));if(cw.length===7){weeks.push(cw);cw=[];}cd.setDate(cd.getDate()+1);}
+            if(cw.length>0)weeks.push(cw);
+            const dh=['일','월','화','수','목','금','토']; if(sow===1)dh.push(dh.shift());
+            const todayKey=formatDateKey(new Date());
+            const getWkMDE=(wk)=>{if(!calendarData)return[];const ws=wk[0],we=wk[6];we.setHours(23,59,59,999);return calendarData.multiDayEvents.filter(e=>e.start<=we&&e.end>=ws);};
+            const thH='1.8rem',mdH='1.4rem';
+            return(
                 <div className="border-t border-l border-slate-300 bg-white flex flex-col flex-grow shadow-lg rounded-xl overflow-hidden">
-                    <div className="grid grid-cols-7">
-                        {dayHeaders.map((day, index) => (
-                            <div key={index} className={`bg-blue-600 text-white text-center py-2 text-sm font-semibold border-r border-b border-blue-700`}>
-                                {day}
-                            </div>
-                        ))}
-                    </div>
+                    <div className="grid grid-cols-7">{dh.map((d,i)=><div key={i} className="bg-blue-600 text-white text-center py-2 text-sm font-semibold border-r border-b border-blue-700">{d}</div>)}</div>
                     <div className="flex-grow grid grid-rows-auto">
-                        {weeks.map((week, weekIndex) => {
-                            const multiDayEventsInWeek = getWeekMultiDayEvents(week);
-                            const maxLanes = multiDayEventsInWeek.length > 0 ? Math.max(...multiDayEventsInWeek.map(e => e.lane)) + 1 : 0;
-                            const reservedHeight = `calc(${maxLanes} * ${multiDayEventHeight})`;
-
-                            return (
-                                <div key={weekIndex} className="grid grid-cols-7 relative border-b border-slate-300" 
-                                     style={{ minHeight: '120px' }}>
-                                    {multiDayEventsInWeek.map(event => {
-                                        const weekStart = new Date(week[0]);
-                                        weekStart.setHours(0,0,0,0);
-
-                                        const eventStart = new Date(event.start);
-                                        eventStart.setHours(0,0,0,0);
-                                        
-                                        const eventEnd = new Date(event.end);
-                                        eventEnd.setHours(0,0,0,0);
-
-                                        const startDayIndex = Math.max(0, Math.round((eventStart.getTime() - weekStart.getTime()) / (1000 * 3600 * 24)));
-                                        const endDayIndex = Math.min(6, Math.round((eventEnd.getTime() - weekStart.getTime()) / (1000 * 3600 * 24)));
-                                        
-                                        const startCol = startDayIndex;
-                                        const span = endDayIndex - startDayIndex + 1;
-                                        
-                                        if (span <= 0) return null;
-
-                                        return (
-                                            <div 
-                                                key={event.id}
-                                                // [변경] pointer-events-none 추가: 클릭이 아래쪽 DayCell로 통과되도록 함
-                                                className={`absolute text-xs p-1 rounded overflow-hidden text-ellipsis whitespace-nowrap ${event.color} font-semibold shadow-md pointer-events-none`}
-                                                style={{ 
-                                                    top: `calc(${dayHeaderTopAreaHeight} + ${event.lane} * ${multiDayEventHeight})`, 
-                                                    left: `calc(${(100 / 7) * startCol}% + 2px)`,
-                                                    width: `calc(${(100 / 7) * span}% - 4px)`,
-                                                    height: `calc(${multiDayEventHeight} - 2px)`,
-                                                    zIndex: 5
-                                                }}
-                                            >
-                                                {event.title}
-                                            </div>
-                                        )
+                        {weeks.map((wk,wi)=>{
+                            const mde=getWkMDE(wk); const ml=mde.length>0?Math.max(...mde.map(e=>e.lane))+1:0; const rh=`calc(${ml} * ${mdH})`;
+                            return(
+                                <div key={wi} className="grid grid-cols-7 relative border-b border-slate-300" style={{minHeight:'120px'}}>
+                                    {mde.map(ev=>{
+                                        const ws=new Date(wk[0]);ws.setHours(0,0,0,0);const es=new Date(ev.start);es.setHours(0,0,0,0);const ee=new Date(ev.end);ee.setHours(0,0,0,0);
+                                        const si=Math.max(0,Math.round((es-ws)/864e5)),ei=Math.min(6,Math.round((ee-ws)/864e5)),sp=ei-si+1;
+                                        if(sp<=0)return null;
+                                        return <div key={ev.id} className={`absolute text-xs p-1 rounded overflow-hidden text-ellipsis whitespace-nowrap ${ev.color} font-semibold shadow-md`}
+                                            style={{top:`calc(${thH} + ${ev.lane} * ${mdH})`,left:`calc(${(100/7)*si}% + 2px)`,width:`calc(${(100/7)*sp}% - 4px)`,height:`calc(${mdH} - 2px)`,zIndex:5}}>{ev.title}</div>;
                                     })}
-
-                                    {week.map((date) => {
-                                        const dateKey = formatDateKey(date);
-                                        const dayData = calendarData?.dayDataMap.get(dateKey);
-                                        return (
-                                            <DayCell
-                                                key={dateKey}
-                                                date={date}
-                                                dayData={dayData}
-                                                isToday={dateKey === todayKey}
-                                                isCurrentMonth={date.getMonth() === month}
-                                                reservedHeight={reservedHeight}
-                                                onClick={onDayClick}
-                                            />
-                                        );
-                                    })}
+                                    {wk.map(d=>{const dk=formatDateKey(d);return <DayCell key={dk} date={d} dayData={calendarData?.dayDataMap.get(dk)} isToday={dk===todayKey} isCurrentMonth={d.getMonth()===m} reservedHeight={rh} onClick={onDayClick}/>;})}
                                 </div>
                             );
                         })}
@@ -1410,413 +539,106 @@
                 </div>
             );
         };
-        // --- END: components/Calendar.tsx ---
 
-        // --- START: App.tsx ---
-
-        // --- LocalStorage 관리 ---
-        const StorageManager = {
-            saveEvents: (csv) => localStorage.setItem('schoolEvents', csv),
-            saveHolidays: (csv) => localStorage.setItem('schoolHolidays', csv),
-            saveSpecialEvents: (csv) => localStorage.setItem('schoolSpecialEvents', csv),
-            saveSchoolName: (name) => localStorage.setItem('schoolName', name),
-            saveLogo: (logoData) => localStorage.setItem('schoolLogo', logoData),
-            removeLogo: () => localStorage.removeItem('schoolLogo'),
-            
-            // 사용자 수정 이벤트 관리
-            saveUserModifiedEvents: (events) => localStorage.setItem('userModifiedEvents', JSON.stringify(events)),
-            getUserModifiedEvents: () => {
-                const data = localStorage.getItem('userModifiedEvents');
-                return data ? JSON.parse(data) : {};
-            },
-            clearUserModifiedEvents: () => localStorage.removeItem('userModifiedEvents'),
-
-            // [신규] 사용자 수정 특별행사(Duty) 관리
-            saveUserModifiedDuties: (duties) => localStorage.setItem('userModifiedDuties', JSON.stringify(duties)),
-            getUserModifiedDuties: () => {
-                const data = localStorage.getItem('userModifiedDuties');
-                return data ? JSON.parse(data) : {};
-            },
-            clearUserModifiedDuties: () => localStorage.removeItem('userModifiedDuties'),
-            
-            getEvents: () => localStorage.getItem('schoolEvents'),
-            getHolidays: () => localStorage.getItem('schoolHolidays'),
-            getSpecialEvents: () => localStorage.getItem('schoolSpecialEvents'),
-            getSchoolName: () => localStorage.getItem('schoolName'),
-            getLogo: () => localStorage.getItem('schoolLogo'),
-            
-            hasData: () => localStorage.getItem('schoolName') !== null,
-            clearData: () => {
-                localStorage.removeItem('schoolEvents');
-                localStorage.removeItem('schoolHolidays');
-                localStorage.removeItem('schoolSpecialEvents');
-                localStorage.removeItem('schoolName');
-                localStorage.removeItem('schoolLogo');
-                localStorage.removeItem('userModifiedEvents');
-                localStorage.removeItem('userModifiedDuties');
-            }
+        // === Storage ===
+        const SM = {
+            saveEvents:c=>localStorage.setItem('schoolEvents',c), saveHolidays:c=>localStorage.setItem('schoolHolidays',c),
+            saveSpecialEvents:c=>localStorage.setItem('schoolSpecialEvents',c), saveSchoolName:n=>localStorage.setItem('schoolName',n),
+            saveLogo:d=>localStorage.setItem('schoolLogo',d), removeLogo:()=>localStorage.removeItem('schoolLogo'),
+            saveOverrides:o=>localStorage.setItem('userOverrides',JSON.stringify(o)),
+            getOverrides:()=>{const d=localStorage.getItem('userOverrides');return d?JSON.parse(d):{};},
+            saveDutyOverrides:o=>localStorage.setItem('dutyOverrides',JSON.stringify(o)),
+            getDutyOverrides:()=>{const d=localStorage.getItem('dutyOverrides');return d?JSON.parse(d):{};},
+            getEvents:()=>localStorage.getItem('schoolEvents'), getHolidays:()=>localStorage.getItem('schoolHolidays'),
+            getSpecialEvents:()=>localStorage.getItem('schoolSpecialEvents'), getSchoolName:()=>localStorage.getItem('schoolName'),
+            getLogo:()=>localStorage.getItem('schoolLogo'),
+            clearData:()=>{['schoolEvents','schoolHolidays','schoolSpecialEvents','schoolName','schoolLogo','userOverrides','dutyOverrides'].forEach(k=>localStorage.removeItem(k));}
         };
 
-        const DataUploadModal = ({ onDataLoaded, onClose }) => {
-            const [schoolName, setSchoolName] = useState(StorageManager.getSchoolName() || '');
-            const [events, setEvents] = useState(null);
-            const [holidays, setHolidays] = useState(null);
-            const [specialEvents, setSpecialEvents] = useState(null);
-            const [logo, setLogo] = useState(StorageManager.getLogo());
-            const [uploadedFiles, setUploadedFiles] = useState({
-                events: false,
-                holidays: false,
-                specialEvents: false,
-                logo: false
-            });
-            const [error, setError] = useState('');
-            
-            const handleFileChange = (e, type) => {
-                const file = e.target.files[0];
-                if (!file) return;
-
-                setError(''); 
-
-                if (type === 'logo') {
-                    const reader = new FileReader();
-                    reader.onload = (event) => {
-                        setLogo(event.target.result);
-                        setUploadedFiles(prev => ({...prev, logo: true}));
-                    };
-                    reader.onerror = () => setError("로고 파일을 읽는 중 오류가 발생했습니다.");
-                    reader.readAsDataURL(file);
-                    return;
-                } 
-                
-                const fileName = file.name.toLowerCase();
-                const isExcel = fileName.endsWith('.xlsx') || fileName.endsWith('.xls');
-                
-                const callback = (csvText) => {
-                    if (type === 'events') {
-                        setEvents(csvText);
-                    } else if (type === 'holidays') {
-                        setHolidays(csvText);
-                    } else if (type === 'specialEvents') {
-                        setSpecialEvents(csvText);
-                    }
-                    setUploadedFiles(prev => ({...prev, [type]: true}));
-                    setError('');
-                };
-                
-                const onError = (message) => {
-                    setError(message);
-                    setUploadedFiles(prev => ({...prev, [type]: false}));
-                };
-
-                if (isExcel) {
-                    processExcelFile(file, callback, onError);
-                } else {
-                    processCsvFile(file, callback, onError);
-                }
+        // === DataUploadModal ===
+        const DataUploadModal = ({onDataLoaded, onClose}) => {
+            const [sn,setSn]=useState(SM.getSchoolName()||'');const[ev,setEv]=useState(null);const[hd,setHd]=useState(null);const[se,setSe]=useState(null);
+            const[logo,setLogo]=useState(SM.getLogo());const[uf,setUf]=useState({events:false,holidays:false,specialEvents:false,logo:false});const[err,setErr]=useState('');
+            const hfc=(e,type)=>{const f=e.target.files[0];if(!f)return;setErr('');
+                if(type==='logo'){const r=new FileReader();r.onload=ev=>{setLogo(ev.target.result);setUf(p=>({...p,logo:true}));};r.onerror=()=>setErr("로고 읽기 오류");r.readAsDataURL(f);return;}
+                const fn=f.name.toLowerCase(),isXl=fn.endsWith('.xlsx')||fn.endsWith('.xls');
+                const cb=csv=>{if(type==='events')setEv(csv);else if(type==='holidays')setHd(csv);else setSe(csv);setUf(p=>({...p,[type]:true}));setErr('');};
+                const onE=msg=>{setErr(msg);setUf(p=>({...p,[type]:false}));};
+                if(isXl)processExcelFile(f,cb,onE);else processCsvFile(f,cb,onE);
             };
-
-            const handleRemoveLogo = () => {
-                setLogo(null);
-                setUploadedFiles(prev => ({...prev, logo: false}));
-                StorageManager.removeLogo();
-            };
-
-            const handleSubmit = () => {
-                if (!schoolName.trim()) {
-                    setError('학교명을 입력해주세요.');
-                    return;
-                }
-                
-                StorageManager.saveSchoolName(schoolName);
-                if (events) StorageManager.saveEvents(events);
-                if (holidays) StorageManager.saveHolidays(holidays);
-                if (specialEvents) StorageManager.saveSpecialEvents(specialEvents);
-                if (logo) StorageManager.saveLogo(logo);
-                
-                onDataLoaded({
-                    schoolName: schoolName,
-                    events: events || StorageManager.getEvents(),
-                    holidays: holidays || StorageManager.getHolidays(),
-                    specialEvents: specialEvents || StorageManager.getSpecialEvents(),
-                    logo: logo
-                });
-            };
-
-
-            return (
+            const submit=()=>{if(!sn.trim()){setErr('학교명을 입력해주세요.');return;}SM.saveSchoolName(sn);if(ev)SM.saveEvents(ev);if(hd)SM.saveHolidays(hd);if(se)SM.saveSpecialEvents(se);if(logo)SM.saveLogo(logo);
+                onDataLoaded({schoolName:sn,events:ev||SM.getEvents(),holidays:hd||SM.getHolidays(),specialEvents:se||SM.getSpecialEvents(),logo});};
+            return(
                 <div className="fixed inset-0 bg-black/50 z-50 flex justify-center items-center p-4">
                     <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6">
                         <h1 className="text-3xl font-bold text-slate-800 mb-6">데이터 설정</h1>
                         <div className="space-y-6">
                             <div className="bg-slate-50 p-4 rounded-lg">
                                 <h2 className="font-semibold text-slate-800 mb-4">학교 정보</h2>
-                                <div className="mb-4">
-                                    <label className="block text-sm font-medium text-slate-700 mb-2">
-                                        학교명 * <span className="text-xs text-slate-500">(필수)</span>
-                                    </label>
-                                    <input 
-                                        type="text" 
-                                        placeholder="예: 원묵고등학교"
-                                        value={schoolName}
-                                        onChange={(e) => setSchoolName(e.target.value)}
-                                        maxLength={50}
-                                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                                    />
-                                </div>
-                                <div className="mb-4">
-                                    <label className="block text-sm font-medium text-slate-700 mb-2">
-                                        학교 로고 <span className="text-xs text-slate-500">(선택, PNG/JPG 파일)</span>
-                                    </label>
-                                    <div className="flex items-center gap-2">
-                                        <input type="file" accept="image/*" onChange={(e) => handleFileChange(e, 'logo')} className="flex-1 px-3 py-2 border border-slate-300 rounded-lg text-sm" />
-                                        {uploadedFiles.logo && <span className="text-green-600 font-semibold">✓ 변경됨</span>}
-                                    </div>
-                                    {logo && (
-                                        <div className="mt-3 flex items-center gap-3">
-                                            <img src={logo} alt="School Logo" className="h-20 object-contain" />
-                                            <button onClick={handleRemoveLogo} className="px-3 py-2 bg-red-100 text-red-700 font-semibold rounded-lg hover:bg-red-200 transition-colors text-sm">삭제</button>
-                                        </div>
-                                    )}
-                                </div>
+                                <div className="mb-4"><label className="block text-sm font-medium text-slate-700 mb-2">학교명 *</label><input type="text" placeholder="예: 원묵고등학교" value={sn} onChange={e=>setSn(e.target.value)} maxLength={50} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"/></div>
+                                <div className="mb-4"><label className="block text-sm font-medium text-slate-700 mb-2">학교 로고 <span className="text-xs text-slate-500">(선택)</span></label>
+                                <div className="flex items-center gap-2"><input type="file" accept="image/*" onChange={e=>hfc(e,'logo')} className="flex-1 px-3 py-2 border border-slate-300 rounded-lg text-sm"/>{uf.logo&&<span className="text-green-600 font-semibold">✓</span>}</div>
+                                {logo&&<div className="mt-3 flex items-center gap-3"><img src={logo} alt="Logo" className="h-20 object-contain"/><button onClick={()=>{setLogo(null);setUf(p=>({...p,logo:false}));SM.removeLogo();}} className="px-3 py-2 bg-red-100 text-red-700 font-semibold rounded-lg hover:bg-red-200 text-sm">삭제</button></div>}</div>
                             </div>
                             <div className="bg-slate-50 p-4 rounded-lg">
                                 <h2 className="font-semibold text-slate-800 mb-4">학사일정 데이터 업로드</h2>
-                                <p className="text-xs text-slate-500 mb-4">파일 형식: CSV 또는 XLSX (첫 번째 시트만 사용). 기존 데이터를 덮어씁니다.</p>
-                                
-                                <div className="mb-4">
-                                    <label className="block text-sm font-medium text-slate-700 mb-2">
-                                        학사일정 파일 <span className="text-xs text-slate-500">(날짜, 행사1, 행사2... 형식)</span>
-                                    </label>
-                                    <div className="flex items-center gap-2">
-                                        <input type="file" accept=".csv, .xlsx, .xls" onChange={(e) => handleFileChange(e, 'events')} className="flex-1 px-3 py-2 border border-slate-300 rounded-lg text-sm" />
-                                        {uploadedFiles.events && <span className="text-green-600 font-semibold">✓</span>}
-                                    </div>
-                                </div>
-                                <div className="mb-4">
-                                    <label className="block text-sm font-medium text-slate-700 mb-2">
-                                        공휴일 파일 <span className="text-xs text-slate-500">(날짜, 공휴일명 형식)</span>
-                                    </label>
-                                    <div className="flex items-center gap-2">
-                                        <input type="file" accept=".csv, .xlsx, .xls" onChange={(e) => handleFileChange(e, 'holidays')} className="flex-1 px-3 py-2 border border-slate-300 rounded-lg text-sm" />
-                                        {uploadedFiles.holidays && <span className="text-green-600 font-semibold">✓</span>}
-                                    </div>
-                                </div>
-                                <div className="mb-4">
-                                    <label className="block text-sm font-medium text-slate-700 mb-2">
-                                        특별 행사 파일 <span className="text-xs text-slate-500">(날짜, 요일, 행사명/지도교사 형식)</span>
-                                    </label>
-                                    <div className="flex items-center gap-2">
-                                        <input type="file" accept=".csv, .xlsx, .xls" onChange={(e) => handleFileChange(e, 'specialEvents')} className="flex-1 px-3 py-2 border border-slate-300 rounded-lg text-sm" />
-                                        {uploadedFiles.specialEvents && <span className="text-green-600 font-semibold">✓</span>}
-                                    </div>
-                                </div>
+                                <p className="text-xs text-slate-500 mb-4">CSV 또는 XLSX 파일</p>
+                                {[['학사일정','events','날짜, 행사1, 행사2...'],['공휴일','holidays','날짜, 공휴일명'],['특별 행사','specialEvents','날짜, 요일, 지도교사']].map(([label,type,hint])=>(
+                                    <div key={type} className="mb-4"><label className="block text-sm font-medium text-slate-700 mb-2">{label} <span className="text-xs text-slate-500">({hint})</span></label>
+                                    <div className="flex items-center gap-2"><input type="file" accept=".csv,.xlsx,.xls" onChange={e=>hfc(e,type)} className="flex-1 px-3 py-2 border border-slate-300 rounded-lg text-sm"/>{uf[type]&&<span className="text-green-600 font-semibold">✓</span>}</div></div>
+                                ))}
                             </div>
-                            {error && <div className="p-4 bg-red-100 border border-red-300 rounded-lg text-red-700 text-sm">{error}</div>}
-                            <div className="flex gap-3 pt-4">
-                                <button onClick={handleSubmit} className="flex-1 px-4 py-3 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 transition-colors">저장하고 닫기</button>
-                                <button onClick={onClose} className="flex-1 px-4 py-3 bg-slate-300 text-slate-700 font-semibold rounded-lg hover:bg-slate-400 transition-colors">
-                                    취소
-                                </button>
-                            </div>
+                            {err&&<div className="p-4 bg-red-100 border border-red-300 rounded-lg text-red-700 text-sm">{err}</div>}
+                            <div className="flex gap-3 pt-4"><button onClick={submit} className="flex-1 px-4 py-3 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700">저장하고 닫기</button><button onClick={onClose} className="flex-1 px-4 py-3 bg-slate-300 text-slate-700 font-semibold rounded-lg hover:bg-slate-400">취소</button></div>
                         </div>
                     </div>
                 </div>
             );
         };
 
+        // === App ===
         const App = () => {
-            const [rawEventsData, setRawEventsData] = useState('');
-            const [rawHolidaysData, setRawHolidaysData] = useState('');
-            const [rawDutiesData, setRawDutiesData] = useState('');
-            const [schoolLogo, setSchoolLogo] = useState(null);
-            const [showDataModal, setShowDataModal] = useState(false);
-            const [viewDate, setViewDate] = useState(new Date());
-            const [startOfWeek, setStartOfWeek] = useState(0);
-            const [selectedDay, setSelectedDay] = useState(null);
-            const [schoolName, setSchoolName] = useState('');
-            const [userModifiedEvents, setUserModifiedEvents] = useState({});
-            const [userModifiedDuties, setUserModifiedDuties] = useState({}); // [신규] 특별 행사 수정 상태
-            const [showResetConfirm, setShowResetConfirm] = useState(false);
+            const[red,setRed]=useState('');const[rhd,setRhd]=useState('');const[rdd,setRdd]=useState('');
+            const[logo,setLogo]=useState(null);const[sdm,setSdm]=useState(false);const[vd,setVd]=useState(new Date());
+            const[sow,setSow]=useState(0);const[sel,setSel]=useState(null);const[sn,setSn]=useState('');
+            const[uo,setUo]=useState({});
+            const[duo,setDuo]=useState({});
 
-            useEffect(() => {
-                const savedSchoolName = StorageManager.getSchoolName();
+            useEffect(()=>{
+                const saved=SM.getSchoolName();
+                if(saved){setSn(saved);setLogo(SM.getLogo()||DEFAULT_LOGO_DATA_URL);setRed(SM.getEvents()||'');setRhd(SM.getHolidays()||'');setRdd(SM.getSpecialEvents()||'');setUo(SM.getOverrides());setDuo(SM.getDutyOverrides());}
+                else{SM.saveSchoolName(DEFAULT_SCHOOL_NAME);SM.saveLogo(DEFAULT_LOGO_DATA_URL);SM.saveEvents(rawEventsCsv);SM.saveHolidays(rawHolidaysCsv);SM.saveSpecialEvents(rawDutiesCsv);
+                    setSn(DEFAULT_SCHOOL_NAME);setLogo(DEFAULT_LOGO_DATA_URL);setRed(rawEventsCsv);setRhd(rawHolidaysCsv);setRdd(rawDutiesCsv);}
+            },[]);
 
-                if (savedSchoolName) {
-                    setSchoolName(savedSchoolName);
-                    setSchoolLogo(StorageManager.getLogo() || DEFAULT_LOGO_DATA_URL);
-                    setRawEventsData(StorageManager.getEvents() || '');
-                    setRawHolidaysData(StorageManager.getHolidays() || '');
-                    setRawDutiesData(StorageManager.getSpecialEvents() || '');
-                    setUserModifiedEvents(StorageManager.getUserModifiedEvents());
-                    setUserModifiedDuties(StorageManager.getUserModifiedDuties());
-                    setShowDataModal(false);
-                } else {
-                    StorageManager.saveSchoolName(DEFAULT_SCHOOL_NAME);
-                    StorageManager.saveLogo(DEFAULT_LOGO_DATA_URL);
-                    StorageManager.saveEvents(rawEventsCsv);
-                    StorageManager.saveHolidays(rawHolidaysCsv);
-                    StorageManager.saveSpecialEvents(rawDutiesCsv);
+            const re=useMemo(()=>parseEventsCsv(red),[red]);
+            const hd=useMemo(()=>parseHolidaysCsv(rhd),[rhd]);
+            const du=useMemo(()=>parseTeachersCsv(rdd),[rdd]);
+            const cd=useMemo(()=>processCalendarData(re,hd,du,uo,duo),[re,hd,du,uo,duo]);
 
-                    setSchoolName(DEFAULT_SCHOOL_NAME);
-                    setSchoolLogo(DEFAULT_LOGO_DATA_URL);
-                    setRawEventsData(rawEventsCsv);
-                    setRawHolidaysData(rawHolidaysCsv);
-                    setRawDutiesData(rawDutiesCsv);
-                    
-                    setShowDataModal(false); 
-                }
-            }, []);
+            const handleDataLoaded=(d)=>{setSn(d.schoolName);setRed(d.events);setRhd(d.holidays);setRdd(d.specialEvents);if(d.logo)setLogo(d.logo);setSdm(false);};
+            const handleReset=()=>{if(window.confirm('정말로 모든 데이터를 초기화하시겠습니까?')){SM.clearData();SM.saveSchoolName(DEFAULT_SCHOOL_NAME);SM.saveLogo(DEFAULT_LOGO_DATA_URL);SM.saveEvents(rawEventsCsv);SM.saveHolidays(rawHolidaysCsv);SM.saveSpecialEvents(rawDutiesCsv);
+                setSn(DEFAULT_SCHOOL_NAME);setLogo(DEFAULT_LOGO_DATA_URL);setRed(rawEventsCsv);setRhd(rawHolidaysCsv);setRdd(rawDutiesCsv);setUo({});setDuo({});setSdm(false);}};
 
-            const rawEvents = useMemo(() => parseEventsCsv(rawEventsData), [rawEventsData]);
-            const holidays = useMemo(() => parseHolidaysCsv(rawHolidaysData), [rawHolidaysData]);
-            const duties = useMemo(() => parseTeachersCsv(rawDutiesData), [rawDutiesData]); 
+            const handleSaveOverride=useCallback((dk,list)=>{setUo(p=>{const n={...p,[dk]:list};SM.saveOverrides(n);return n;});setSel(null);},[]);
+            const handleRemoveOverride=useCallback((dk)=>{setUo(p=>{const n={...p};delete n[dk];SM.saveOverrides(n);return n;});setSel(null);},[]);
+            const handleSaveDutyOverride=useCallback((dk,text)=>{setDuo(p=>{const n={...p,[dk]:text};SM.saveDutyOverrides(n);return n;});setSel(null);},[]);
+            const handleRemoveDutyOverride=useCallback((dk)=>{setDuo(p=>{const n={...p};delete n[dk];SM.saveDutyOverrides(n);return n;});setSel(null);},[]);
+            const handleDayClick=useCallback((dd)=>setSel(dd),[]);
 
-            const calendarData = useMemo(() => {
-                // userModifiedDuties 추가 전달
-                return processCalendarData(rawEvents, holidays, duties, userModifiedEvents, userModifiedDuties);
-            }, [rawEvents, holidays, duties, userModifiedEvents, userModifiedDuties]);
-
-
-            const handleDataLoaded = (data) => {
-                setSchoolName(data.schoolName);
-                setRawEventsData(data.events);
-                setRawHolidaysData(data.holidays);
-                setRawDutiesData(data.specialEvents);
-                if (data.logo) {
-                    setSchoolLogo(data.logo);
-                }
-                setShowDataModal(false);
-            };
-
-            const handleReset = () => {
-                StorageManager.clearData();
-                
-                StorageManager.saveSchoolName(DEFAULT_SCHOOL_NAME);
-                StorageManager.saveLogo(DEFAULT_LOGO_DATA_URL);
-                StorageManager.saveEvents(rawEventsCsv);
-                StorageManager.saveHolidays(rawHolidaysCsv);
-                StorageManager.saveSpecialEvents(rawDutiesCsv);
-                
-                setSchoolName(DEFAULT_SCHOOL_NAME);
-                setSchoolLogo(DEFAULT_LOGO_DATA_URL);
-                setRawEventsData(rawEventsCsv);
-                setRawHolidaysData(rawHolidaysCsv);
-                setRawDutiesData(rawDutiesCsv);
-                setUserModifiedEvents({});
-                setUserModifiedDuties({});
-                
-                setShowDataModal(false);
-                setShowResetConfirm(false);
-            };
-
-            const handleSaveUserEvents = useCallback((dateKey, events, duty) => {
-                // 1. 이벤트 목록 저장
-                setUserModifiedEvents(prev => {
-                    const newEvents = { ...prev };
-                    newEvents[dateKey] = events;
-                    StorageManager.saveUserModifiedEvents(newEvents);
-                    return newEvents;
-                });
-
-                // 2. 특별 행사(Duty) 저장
-                setUserModifiedDuties(prev => {
-                    const newDuties = { ...prev };
-                    newDuties[dateKey] = duty;
-                    StorageManager.saveUserModifiedDuties(newDuties);
-                    return newDuties;
-                });
-            }, []);
-
-            const handleResetDate = useCallback((dateKey) => {
-                // 1. 이벤트 복구
-                setUserModifiedEvents(prev => {
-                    const newEvents = { ...prev };
-                    delete newEvents[dateKey];
-                    StorageManager.saveUserModifiedEvents(newEvents);
-                    return newEvents;
-                });
-
-                // 2. 특별 행사 복구
-                setUserModifiedDuties(prev => {
-                    const newDuties = { ...prev };
-                    delete newDuties[dateKey];
-                    StorageManager.saveUserModifiedDuties(newDuties);
-                    return newDuties;
-                });
-            }, []);
-
-
-            const handleDayClick = useCallback((dayData) => {
-                setSelectedDay(dayData);
-            }, []);
-
-            return (
+            return(
                 <div className="w-full max-w-7xl mx-auto bg-white rounded-2xl shadow-xl flex flex-col min-h-[85vh] overflow-hidden">
-                     <Header
-                        viewDate={viewDate}
-                        setViewDate={setViewDate}
-                        startOfWeek={startOfWeek}
-                        setStartOfWeek={setStartOfWeek}
-                        onReset={() => setShowResetConfirm(true)}
-                        onShowDataModal={() => setShowDataModal(true)}
-                        schoolName={schoolName}
-                        schoolLogo={schoolLogo}
-                    />
-                    <main className="flex-grow p-1 sm:p-2 lg:p-4"> 
-                        <Calendar
-                            viewDate={viewDate}
-                            startOfWeek={startOfWeek}
-                            calendarData={calendarData}
-                            onDayClick={handleDayClick}
-                        />
-                    </main>
-                    <footer className="p-2 text-center text-xs text-slate-500 border-t border-slate-200">
-                        © 2026 KH KIM. All Rights Reserved.
-                    </footer>
-                    {selectedDay && (
-                        <EventModal 
-                            dayData={selectedDay} 
-                            onClose={() => setSelectedDay(null)} 
-                            onSaveUserEvents={handleSaveUserEvents}
-                            onResetDate={handleResetDate}
-                            userModifiedEvents={userModifiedEvents}
-                        />
-                    )}
-                    {showDataModal && (
-                        <DataUploadModal 
-                            onDataLoaded={handleDataLoaded} 
-                            onClose={() => setShowDataModal(false)} 
-                        />
-                    )}
-                    <ConfirmModal
-                        isOpen={showResetConfirm}
-                        message={`정말로 모든 데이터를 초기화하시겠습니까?\n\n로고, 학교명, 학사일정 데이터, 사용자 추가 일정이 모두 삭제되고 기본 상태로 돌아갑니다.`}
-                        onConfirm={handleReset}
-                        onCancel={() => setShowResetConfirm(false)}
-                        confirmText="전체 초기화"
-                        isDanger={true}
-                    />
+                    <Header viewDate={vd} setViewDate={setVd} startOfWeek={sow} setStartOfWeek={setSow} onReset={handleReset} onShowDataModal={()=>setSdm(true)} schoolName={sn} schoolLogo={logo}/>
+                    <main className="flex-grow p-1 sm:p-2 lg:p-4"><Calendar viewDate={vd} startOfWeek={sow} calendarData={cd} onDayClick={handleDayClick}/></main>
+                    <footer className="p-2 text-center text-xs text-slate-500 border-t border-slate-200">© 2026 KH KIM. All Rights Reserved.</footer>
+                    {sel&&<EventModal dayData={sel} onClose={()=>setSel(null)} onSaveOverride={handleSaveOverride} onRemoveOverride={handleRemoveOverride} onSaveDutyOverride={handleSaveDutyOverride} onRemoveDutyOverride={handleRemoveDutyOverride}/>}
+                    {sdm&&<DataUploadModal onDataLoaded={handleDataLoaded} onClose={()=>setSdm(false)}/>}
                 </div>
             );
         };
-        // --- END: App.tsx ---
 
-        // --- START: index.tsx (Mounting Logic) ---
-        const rootElement = document.getElementById('root');
-        if (!rootElement) {
-          throw new Error("Could not find root element to mount to");
-        }
-
-        const root = ReactDOM.createRoot(rootElement);
-        root.render(
-          <React.StrictMode>
-            <ErrorBoundary>
-                <App />
-            </ErrorBoundary>
-          </React.StrictMode>
-        );
-        // --- END: index.tsx ---
+        const root=ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<React.StrictMode><App/></React.StrictMode>);
     </script>
 </body>
 </html>
-
