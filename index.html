@@ -13,6 +13,47 @@
     <style>
       body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
       .grid-rows-auto { grid-auto-rows: minmax(100px, 1fr); }
+
+      /* === Print Styles === */
+      @media print {
+        @page {
+          size: A4 landscape;
+          margin: 0.5cm;
+        }
+        body {
+          background: white !important;
+          padding: 0 !important;
+          margin: 0 !important;
+        }
+        #root > div {
+          box-shadow: none !important;
+          border-radius: 0 !important;
+          width: 100% !important;
+          max-width: none !important;
+          min-height: 0 !important;
+          /* 사용자 피드백 반영: 인쇄 비율 98% 적용 */
+          zoom: 98%;
+          transform-origin: top left;
+        }
+        header, main, footer {
+          padding: 0 !important;
+        }
+        .print\:hidden {
+          display: none !important;
+        }
+        /* 배경색 강제 출력 */
+        * {
+          -webkit-print-color-adjust: exact !important;
+          print-color-adjust: exact !important;
+        }
+        /* 캘린더 높이 조정 (한 페이지에 맞춤) */
+        .grid-rows-auto {
+          grid-auto-rows: minmax(auto, 1fr);
+        }
+        .min-h-\[85vh\] {
+          min-height: auto !important;
+        }
+      }
     </style>
     <script src="https://unpkg.com/react@18.2.0/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18.2.0/umd/react-dom.production.min.js"></script>
@@ -121,6 +162,7 @@
 "2026. 8. 26","과학토론마당","참가 신청 마감일","교원학습공동체5"
 "2026. 8. 27","금요일 수업","(동3)",""
 "2026. 8. 28","묵향제","",""
+"2026. 8. 29","가족과 함께하는 별축제","",""
 "2026. 9. 2","학력평가(1,2)","대수능 모평(3)",""
 "2026. 9. 4","교육과정박람회","과학토론마당","개요서제출(예선)"
 "2026. 9. 9","독서멘토링 전체 토론일","",""
@@ -211,7 +253,6 @@
         const rawDutiesCsv = `"날짜","요일","지도교사","종류","비고"
 "2026. 3. 2","월","신미래","휴일근무","대체공휴일(3·1절)"
 "2026. 3. 3","화","김화섭","",""
-
 `;
 
         // === Data Processing ===
@@ -219,8 +260,6 @@
             if(!s) return null;
             let c=s.replace(/\./g,'-').replace(/\s/g,''); let p=c.split('-').filter(x=>x);
             if(p.length===3){const[y,m,d]=p.map(x=>parseInt(x,10));if(!isNaN(y)&&y>1900&&m>=1&&m<=12&&d>=1&&d<=31)return new Date(y,m-1,d);}
-            c=s.replace(/\./g,'/').replace(/\s/g,'');p=c.split('/');
-            if(p.length===3){const[m,d,y]=p.map(x=>parseInt(x,10));if(!isNaN(y)&&y>1900&&m>=1&&m<=12&&d>=1&&d<=31)return new Date(y,m-1,d);}
             const dt=new Date(s); if(dt instanceof Date&&!isNaN(dt))return dt; return null;
         };
         const formatDateKey = (d) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
@@ -233,7 +272,6 @@
         const parseHolidaysCsv = (csv) => { const lines=csv.trim().split('\n').slice(1); const h=[]; lines.forEach(l=>{if(!l.trim())return;const[ds,nm]=parseCsvLine(l);const d=parseDate(ds);if(d&&nm)h.push({date:d,name:nm.trim()});}); return h; };
         const parseTeachersCsv = (csv) => { const lines=csv.trim().split('\n').slice(1); const d=[]; lines.forEach(l=>{if(!l.trim())return;const[ds,_,t]=parseCsvLine(l);const dt=parseDate(ds);if(dt&&t&&t.trim())d.push({date:dt,teacher:t.trim()});}); return d; };
 
-        /* [수정1] 색상: -200 파스텔 + 검정 글씨 */
         const EVENT_COLORS = [
             {bg:'bg-sky-200',text:'text-black'},{bg:'bg-emerald-200',text:'text-black'},
             {bg:'bg-amber-200',text:'text-black'},{bg:'bg-violet-200',text:'text-black'},
@@ -266,7 +304,6 @@
             return {multiDayEvents:lanes,processedEventIds:processed};
         };
 
-        /* [수정2] processCalendarData: userOverrides 적용 - override가 있는 날짜는 CSV 대신 override 사용 */
         const processCalendarData = (rawEvents, holidays, duties, userOverrides={}, dutyOverrides={}) => {
             const dayDataMap = new Map();
             const baseEventsMap = new Map();
@@ -286,7 +323,6 @@
 
             holidays.forEach(h => { const k=formatDateKey(h.date); if(!dayDataMap.has(k))dayDataMap.set(k,{date:h.date,events:[],allEvents:[],holiday:null,teacherDuty:null,baseDuty:null,isDutyOverridden:false,isOverridden:false,baseEvents:[]}); dayDataMap.get(k).holiday=h; });
             duties.forEach(d => { const k=formatDateKey(d.date); if(!dayDataMap.has(k))dayDataMap.set(k,{date:d.date,events:[],allEvents:[],holiday:null,teacherDuty:null,baseDuty:null,isOverridden:false,baseEvents:[]}); const dd=dayDataMap.get(k); dd.teacherDuty=d; dd.baseDuty=d.teacher; });
-            // dutyOverrides 적용: 값이 있으면 덮어쓰기, 빈 문자열이면 삭제, null이면 삭제
             for(const[k,v] of Object.entries(dutyOverrides)) {
                 if(!dayDataMap.has(k)){const[y,m,d]=k.split('-').map(Number);dayDataMap.set(k,{date:new Date(y,m-1,d),events:[],allEvents:[],holiday:null,teacherDuty:null,baseDuty:null,isOverridden:false,baseEvents:[]});}
                 const dd=dayDataMap.get(k); dd.isDutyOverridden=true;
@@ -295,7 +331,6 @@
             }
 
             const {multiDayEvents,processedEventIds} = findAndProcessMultiDayEvents(dayDataMap);
-            // 필터링 전 allEvents 보존 (모달 편집용)
             for(const[k,dd] of dayDataMap.entries()) { dd.allEvents=[...dd.events]; dd.events=dd.events.filter(e=>!processedEventIds.has(`${k}_${e.fullTitle}`)); }
             return {dayDataMap,multiDayEvents};
         };
@@ -308,8 +343,8 @@
         const RefreshIcon=(p)=><svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" {...p}><path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>;
         const ChevronLeftIcon=(p)=><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} {...p}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7"/></svg>;
         const ChevronRightIcon=(p)=><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} {...p}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7"/></svg>;
+        const PrinterIcon=(p)=><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} {...p}><path strokeLinecap="round" strokeLinejoin="round" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>;
 
-        /* [수정2] EventModal: 모든 이벤트(내장+추가) 편집 가능 + 기본값 복원 */
         const EventModal = ({dayData, onClose, onSaveOverride, onRemoveOverride, onSaveDutyOverride, onRemoveDutyOverride}) => {
             const {date, events, allEvents, holiday, teacherDuty, baseEvents, isOverridden, baseDuty, isDutyOverridden} = dayData;
             const displayEvents = allEvents || events;
@@ -334,7 +369,7 @@
             const handleRestore = () => { if(window.confirm('이 날짜의 일정을 기본값(CSV 원본)으로 복원하시겠습니까?')){onRemoveOverride(dateKey);setIsEditing(false);} };
 
             return (
-                <div className="fixed inset-0 bg-black/50 z-50 flex justify-center items-center p-4" onClick={onClose}>
+                <div className="fixed inset-0 bg-black/50 z-50 flex justify-center items-center p-4 print:hidden" onClick={onClose}>
                     <div className="bg-white rounded-lg shadow-xl w-full max-w-md max-h-[85vh] flex flex-col" onClick={e=>e.stopPropagation()}>
                         <header className="p-4 border-b border-slate-200 flex justify-between items-center">
                             <div>
@@ -345,7 +380,6 @@
                         </header>
                         <div className="flex-grow p-4 overflow-y-auto space-y-4">
                             {holiday && <div><h3 className="font-semibold text-slate-700 text-sm mb-1 uppercase tracking-wider">공휴일</h3><div className="p-3 bg-red-50 border border-red-200 rounded-lg"><p className="font-bold text-red-700">{holiday.name}</p></div></div>}
-
                             <div>
                                 <div className="flex justify-between items-center mb-2">
                                     <h3 className="font-semibold text-slate-700 text-sm uppercase tracking-wider">일정</h3>
@@ -354,7 +388,6 @@
                                         {!isEditing && <button onClick={startEditing} className="flex items-center gap-1 px-3 py-1 bg-blue-100 text-blue-700 text-sm font-medium rounded-lg hover:bg-blue-200 transition-colors"><PencilIcon/>편집</button>}
                                     </div>
                                 </div>
-
                                 {isEditing ? (
                                     <div className="space-y-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
                                         {editingEvents.length > 0 ? (
@@ -380,42 +413,35 @@
                                             <button onClick={handleSave} className="flex-1 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors">저장</button>
                                             <button onClick={handleCancel} className="flex-1 px-4 py-2 bg-slate-300 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-400 transition-colors">취소</button>
                                         </div>
-                                        {baseEvents && baseEvents.length > 0 && <button onClick={()=>setEditingEvents([...baseEvents])} className="w-full flex items-center justify-center gap-1 px-3 py-1.5 bg-orange-50 text-orange-600 text-xs font-medium rounded-lg hover:bg-orange-100 transition-colors border border-orange-200"><RefreshIcon/>CSV 기본값으로 되돌리기</button>}
                                     </div>
                                 ) : (
                                     displayEvents.length > 0 ? (
                                         <ul className="space-y-2">{displayEvents.map((ev,i)=><li key={i} className={`p-2 rounded-lg text-sm font-medium ${ev.color}`}>{ev.fullTitle}</li>)}</ul>
                                     ) : (
-                                        <div className="text-center py-4 text-slate-400 text-sm bg-slate-50 rounded-lg border border-dashed border-slate-300">등록된 일정이 없습니다.<br/><span className="text-blue-600">"편집" 버튼</span>을 눌러 일정을 추가하세요.</div>
+                                        <div className="text-center py-4 text-slate-400 text-sm bg-slate-50 rounded-lg border border-dashed border-slate-300">등록된 일정이 없습니다.</div>
                                     )
                                 )}
                             </div>
-
                             <div>
                                 <div className="flex justify-between items-center mb-2">
                                     <h3 className="font-semibold text-slate-700 text-sm uppercase tracking-wider">특별 행사 / 지도 교사</h3>
-                                    <div className="flex gap-1">
-                                        {isDutyOverridden && !isDutyEditing && <button onClick={()=>{onRemoveDutyOverride(dateKey);}} className="flex items-center gap-1 px-2 py-1 bg-orange-100 text-orange-700 text-xs font-medium rounded-lg hover:bg-orange-200 transition-colors" title="기본값으로 복원"><RefreshIcon/>기본값 복원</button>}
-                                        {!isDutyEditing && <button onClick={()=>{setDutyText(teacherDuty?teacherDuty.teacher:'');setIsDutyEditing(true);}} className="flex items-center gap-1 px-3 py-1 bg-blue-100 text-blue-700 text-sm font-medium rounded-lg hover:bg-blue-200 transition-colors"><PencilIcon/>편집</button>}
-                                    </div>
+                                    {!isDutyEditing && <button onClick={()=>{setDutyText(teacherDuty?teacherDuty.teacher:'');setIsDutyEditing(true);}} className="flex items-center gap-1 px-3 py-1 bg-blue-100 text-blue-700 text-sm font-medium rounded-lg hover:bg-blue-200 transition-colors"><PencilIcon/>편집</button>}
                                 </div>
                                 {isDutyEditing ? (
                                     <div className="space-y-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                                        <input type="text" value={dutyText} onChange={e=>setDutyText(e.target.value)} onKeyPress={e=>{if(e.key==='Enter'){onSaveDutyOverride(dateKey,dutyText);setIsDutyEditing(false);}}} placeholder="지도 교사 이름 (비우면 삭제)" className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"/>
+                                        <input type="text" value={dutyText} onChange={e=>setDutyText(e.target.value)} placeholder="지도 교사 이름" className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"/>
                                         <div className="flex gap-2">
                                             <button onClick={()=>{onSaveDutyOverride(dateKey,dutyText);setIsDutyEditing(false);}} className="flex-1 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors">저장</button>
                                             <button onClick={()=>setIsDutyEditing(false)} className="flex-1 px-4 py-2 bg-slate-300 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-400 transition-colors">취소</button>
                                         </div>
-                                        {baseDuty && <button onClick={()=>setDutyText(baseDuty)} className="w-full flex items-center justify-center gap-1 px-3 py-1.5 bg-orange-50 text-orange-600 text-xs font-medium rounded-lg hover:bg-orange-100 transition-colors border border-orange-200"><RefreshIcon/>CSV 기본값으로 되돌리기</button>}
                                     </div>
                                 ) : (
                                     teacherDuty ? (
                                         <div className="p-3 bg-slate-100 border border-slate-200 rounded-lg">
                                             <p className="text-slate-800 font-medium">{teacherDuty.teacher}</p>
-                                            {isDutyOverridden && <span className="text-xs text-orange-600 font-medium">✏️ 사용자 수정됨</span>}
                                         </div>
                                     ) : (
-                                        <div className="text-center py-3 text-slate-400 text-sm bg-slate-50 rounded-lg border border-dashed border-slate-300">등록된 지도 교사가 없습니다.<br/><span className="text-blue-600">"편집" 버튼</span>을 눌러 추가하세요.</div>
+                                        <div className="text-center py-3 text-slate-400 text-sm bg-slate-50 rounded-lg border border-dashed border-slate-300">등록된 지도 교사가 없습니다.</div>
                                     )
                                 )}
                             </div>
@@ -426,7 +452,6 @@
             );
         };
 
-        // === MiniCalendar ===
         const MiniCalendar = ({date, startOfWeek}) => {
             const ms=startOfMonth(date),me=endOfMonth(date),cs=dateFnsStartOfWeek(ms,{weekStartsOn:startOfWeek}),ce=endOfWeek(me,{weekStartsOn:startOfWeek});
             const days=eachDayOfInterval({start:cs,end:ce}); let dh=['S','M','T','W','T','F','S']; if(startOfWeek===1)dh.push(dh.shift());
@@ -435,44 +460,48 @@
             <div className="grid grid-cols-7 text-center text-xs mt-1">{days.map(d=>{const dw=d.getDay(),cm=isSameMonth(d,date);let tc='text-slate-600';if(!cm)tc='text-slate-300';else if(dw===0)tc='text-red-500';else if(dw===6)tc='text-blue-500';return(<div key={d.toString()} className={`w-6 h-4 flex items-center justify-center rounded-full ${isToday(d)?'bg-blue-600 text-white shadow-md':tc}`}>{format(d,'d')}</div>);})}</div></div>);
         };
 
-        // === Header ===
         const Header = ({viewDate, setViewDate, startOfWeek, setStartOfWeek, onReset, onShowDataModal, schoolName, schoolLogo}) => {
             const cy=viewDate.getFullYear(),cm=viewDate.getMonth();
             const prev=()=>setViewDate(new Date(cy,cm-1,1)), next=()=>setViewDate(new Date(cy,cm+1,1)), today=()=>setViewDate(new Date());
             const pm=new Date(cy,cm-1,1),nm=new Date(cy,cm+1,1);
             const selCls="bg-white text-slate-700 text-sm border-gray-300 rounded-md shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50";
             const btnCls="px-3 py-2 border border-gray-300 bg-white text-slate-700 text-sm font-medium rounded-md shadow-sm hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500";
+            
+            const handlePrint = () => window.print();
+
             return(
                 <header className="bg-white shadow-sm sticky top-0 z-20">
                     <div className="p-2 flex justify-between items-center gap-4">
-                        <div className="hidden lg:block"><MiniCalendar date={pm} startOfWeek={startOfWeek}/></div>
+                        <div className="hidden lg:block print:hidden"><MiniCalendar date={pm} startOfWeek={startOfWeek}/></div>
                         <div className="text-center p-4 sm:p-6 rounded-xl shadow-lg bg-gradient-to-r from-sky-500 to-indigo-600 text-white select-none flex-grow">
                             <h1 className="text-2xl sm:text-3xl font-bold">스마트 스쿨 캘린더</h1>
                             <p className="text-sm sm:text-base mt-1">{schoolName?schoolName+" ":""}학사 일정 관리 시스템</p>
                         </div>
-                        <div className="hidden lg:block"><MiniCalendar date={nm} startOfWeek={startOfWeek}/></div>
+                        <div className="hidden lg:block print:hidden"><MiniCalendar date={nm} startOfWeek={startOfWeek}/></div>
                     </div>
                     <div className="p-2 border-t border-slate-200 flex items-center justify-between flex-wrap gap-2">
                         <div className="flex items-center gap-2 sm:gap-4">
                             {schoolLogo?<img src={schoolLogo} alt="Logo" className="h-8 sm:h-10 object-contain"/>:<span className="font-bold text-xl text-slate-700">🏫</span>}
-                            <button onClick={today} className={btnCls}>오늘</button>
+                            <button onClick={today} className={`${btnCls} print:hidden`}>오늘</button>
                         </div>
                         <div className="flex items-center absolute left-1/2 -translate-x-1/2">
-                            <button onClick={prev} className="p-2 rounded-full text-slate-500 hover:bg-slate-100 transition-colors"><ChevronLeftIcon/></button>
+                            <button onClick={prev} className="p-2 rounded-full text-slate-500 hover:bg-slate-100 transition-colors print:hidden"><ChevronLeftIcon/></button>
                             <h2 className="text-lg font-semibold text-slate-800 w-32 text-center">{`${cy}년 ${cm+1}월`}</h2>
-                            <button onClick={next} className="p-2 rounded-full text-slate-500 hover:bg-slate-100 transition-colors"><ChevronRightIcon/></button>
+                            <button onClick={next} className="p-2 rounded-full text-slate-500 hover:bg-slate-100 transition-colors print:hidden"><ChevronRightIcon/></button>
                         </div>
                         <div className="flex items-center gap-2">
-                            <select value={startOfWeek} onChange={e=>setStartOfWeek(Number(e.target.value))} className={selCls}><option value={0}>일요일 시작</option><option value={1}>월요일 시작</option></select>
-                            <button onClick={onShowDataModal} className="px-3 py-2 border border-gray-300 bg-blue-50 text-blue-700 text-sm font-medium rounded-md shadow-sm hover:bg-blue-100">데이터 설정</button>
-                            <button onClick={onReset} className="px-3 py-2 border border-gray-300 bg-red-50 text-red-700 text-sm font-medium rounded-md shadow-sm hover:bg-red-100">데이터 초기화</button>
+                            <select value={startOfWeek} onChange={e=>setStartOfWeek(Number(e.target.value))} className={`${selCls} print:hidden`}><option value={0}>일요일 시작</option><option value={1}>월요일 시작</option></select>
+                            <button onClick={handlePrint} className="px-3 py-2 border border-gray-300 bg-emerald-50 text-emerald-700 text-sm font-medium rounded-md shadow-sm hover:bg-emerald-100 flex items-center gap-1">
+                                <PrinterIcon/><span className="hidden sm:inline">인쇄하기</span>
+                            </button>
+                            <button onClick={onShowDataModal} className="px-3 py-2 border border-gray-300 bg-blue-50 text-blue-700 text-sm font-medium rounded-md shadow-sm hover:bg-blue-100 print:hidden">데이터 설정</button>
+                            <button onClick={onReset} className="px-3 py-2 border border-gray-300 bg-red-50 text-red-700 text-sm font-medium rounded-md shadow-sm hover:bg-red-100 print:hidden">데이터 초기화</button>
                         </div>
                     </div>
                 </header>
             );
         };
 
-        // === DayCell ===
         const DayCell = ({date, dayData, isToday:isTodayFlag, isCurrentMonth, reservedHeight, onClick}) => {
             const dn=date.getDate(),dw=date.getDay();
             const dnc=dayData?.holiday?'text-red-500':dw===0?'text-red-500':dw===6?'text-blue-500':isCurrentMonth?'text-slate-700':'text-slate-400';
@@ -481,29 +510,26 @@
             evts.forEach(e=>{if(rem>0){items.push({type:'event',content:e});rem--;}});
             const total=(dayData?.holiday?1:0)+evts.length,more=total-items.length;
             return(
-                <div className={`border-b border-r border-slate-300 flex flex-col relative transition-all duration-200 cursor-pointer ${isCurrentMonth?'bg-gradient-to-br from-white to-slate-50':'bg-gradient-to-br from-slate-50/80 to-slate-100/60'} hover:shadow-md hover:border-blue-300`}
-                    style={{boxShadow:isCurrentMonth?'inset 1px 1px 0 rgba(255,255,255,0.9), inset -1px -1px 0 rgba(0,0,0,0.05), 0 3px 8px rgba(59,130,246,0.12)':'inset 1px 1px 0 rgba(255,255,255,0.6), inset -1px -1px 0 rgba(0,0,0,0.02), 0 2px 4px rgba(0,0,0,0.05)'}}
+                <div className={`border-b border-r border-slate-300 flex flex-col relative transition-all duration-200 cursor-pointer ${isCurrentMonth?'bg-white':'bg-slate-50/50'} hover:shadow-md hover:border-blue-300`}
                     onClick={()=>onClick(dayData||{date,events:[],allEvents:[],holiday:null,teacherDuty:null,baseDuty:null,isDutyOverridden:false,isOverridden:false,baseEvents:[]})}>
                     <div className="flex-shrink-0 p-1 text-center">
-                        <div className={`text-sm font-bold mx-auto transition-all duration-150 ${dnc} ${isTodayFlag?'bg-gradient-to-b from-blue-500 to-blue-700 text-white rounded-full w-7 h-7 flex items-center justify-center shadow-lg shadow-blue-400/40':'w-7 h-7 flex items-center justify-center'}`}
-                             style={!isTodayFlag&&isCurrentMonth?{textShadow:'0 1px 2px rgba(0,0,0,0.1)',fontWeight:'600'}:{}}>{dn}</div>
-                        {(dayData?.isOverridden || dayData?.isDutyOverridden) && <div className="absolute top-1 right-1 text-xs" title="사용자 수정됨">✏️</div>}
+                        <div className={`text-sm font-bold mx-auto ${dnc} ${isTodayFlag?'bg-blue-600 text-white rounded-full w-6 h-6 flex items-center justify-center':'w-6 h-6 flex items-center justify-center'}`}>{dn}</div>
+                        {(dayData?.isOverridden || dayData?.isDutyOverridden) && <div className="absolute top-1 right-1 text-[10px] print:hidden">✏️</div>}
                     </div>
-                    <div className="flex-grow overflow-y-auto px-1 pb-1 space-y-1">
+                    <div className="flex-grow overflow-hidden px-1 pb-1 space-y-0.5">
                         <div style={{height:reservedHeight}} aria-hidden="true"/>
                         {items.map((it,i)=>{
-                            if(it.type==='holiday') return <div key={i} className="text-xs rounded px-1.5 py-0.5 whitespace-nowrap overflow-hidden text-ellipsis bg-gradient-to-b from-red-100 to-red-50 text-red-700 font-medium shadow-sm border border-red-200/50" style={{boxShadow:'0 2px 4px rgba(239,68,68,0.15), inset 0 1px 0 rgba(255,255,255,0.8)'}}>{it.content.name}</div>;
-                            if(it.type==='event') return <div key={i} className={`text-xs rounded px-1.5 py-0.5 whitespace-nowrap overflow-hidden text-ellipsis ${it.content.color} font-medium shadow-sm border border-opacity-30`} style={{boxShadow:'0 2px 4px rgba(0,0,0,0.1), inset 0 1px 0 rgba(255,255,255,0.6)'}}>{it.content.title}</div>;
+                            if(it.type==='holiday') return <div key={i} className="text-[10px] sm:text-xs rounded px-1 py-0.5 whitespace-nowrap overflow-hidden text-ellipsis bg-red-100 text-red-700 font-medium border border-red-200">{it.content.name}</div>;
+                            if(it.type==='event') return <div key={i} className={`text-[10px] sm:text-xs rounded px-1 py-0.5 whitespace-nowrap overflow-hidden text-ellipsis ${it.content.color} font-medium border border-black/10`}>{it.content.title}</div>;
                             return null;
                         })}
-                        {more>0 && <div className="text-xs text-slate-500 font-medium px-1.5 py-0.5">+ {more} more</div>}
+                        {more>0 && <div className="text-[9px] text-slate-500 font-medium px-1">+ {more}</div>}
                     </div>
-                    {dayData?.teacherDuty && <div className="flex-shrink-0 p-1 text-center text-xs font-medium text-slate-600 truncate border-t border-slate-200 mt-1 bg-gradient-to-r from-slate-50/50 to-slate-50" style={{boxShadow:'inset 0 1px 0 rgba(255,255,255,0.8)'}}>{dayData.teacherDuty.teacher}</div>}
+                    {dayData?.teacherDuty && <div className="flex-shrink-0 p-0.5 text-center text-[10px] font-medium text-slate-600 truncate border-t border-slate-100 mt-0.5 bg-slate-50">{dayData.teacherDuty.teacher}</div>}
                 </div>
             );
         };
 
-        // === Calendar ===
         const Calendar = ({viewDate, startOfWeek:sow, calendarData, onDayClick}) => {
             const y=viewDate.getFullYear(),m=viewDate.getMonth();
             const fd=new Date(y,m,1),ld=new Date(y,m+1,0);
@@ -515,20 +541,20 @@
             const dh=['일','월','화','수','목','금','토']; if(sow===1)dh.push(dh.shift());
             const todayKey=formatDateKey(new Date());
             const getWkMDE=(wk)=>{if(!calendarData)return[];const ws=wk[0],we=wk[6];we.setHours(23,59,59,999);return calendarData.multiDayEvents.filter(e=>e.start<=we&&e.end>=ws);};
-            const thH='1.8rem',mdH='1.4rem';
+            const thH='1.5rem',mdH='1.2rem';
             return(
-                <div className="border-t border-l border-slate-300 bg-white flex flex-col flex-grow shadow-lg rounded-xl overflow-hidden">
-                    <div className="grid grid-cols-7">{dh.map((d,i)=><div key={i} className="bg-blue-600 text-white text-center py-2 text-sm font-semibold border-r border-b border-blue-700">{d}</div>)}</div>
+                <div className="border-t border-l border-slate-300 bg-white flex flex-col flex-grow shadow rounded-xl overflow-hidden print:shadow-none print:rounded-none">
+                    <div className="grid grid-cols-7">{dh.map((d,i)=><div key={i} className="bg-blue-600 text-white text-center py-1 text-sm font-semibold border-r border-b border-blue-700">{d}</div>)}</div>
                     <div className="flex-grow grid grid-rows-auto">
                         {weeks.map((wk,wi)=>{
                             const mde=getWkMDE(wk); const ml=mde.length>0?Math.max(...mde.map(e=>e.lane))+1:0; const rh=`calc(${ml} * ${mdH})`;
                             return(
-                                <div key={wi} className="grid grid-cols-7 relative border-b border-slate-300" style={{minHeight:'120px'}}>
+                                <div key={wi} className="grid grid-cols-7 relative border-b border-slate-300" style={{minHeight:'100px'}}>
                                     {mde.map(ev=>{
                                         const ws=new Date(wk[0]);ws.setHours(0,0,0,0);const es=new Date(ev.start);es.setHours(0,0,0,0);const ee=new Date(ev.end);ee.setHours(0,0,0,0);
                                         const si=Math.max(0,Math.round((es-ws)/864e5)),ei=Math.min(6,Math.round((ee-ws)/864e5)),sp=ei-si+1;
                                         if(sp<=0)return null;
-                                        return <div key={ev.id} className={`absolute text-xs p-1 rounded overflow-hidden text-ellipsis whitespace-nowrap ${ev.color} font-semibold shadow-md`}
+                                        return <div key={ev.id} className={`absolute text-[10px] px-1 rounded overflow-hidden text-ellipsis whitespace-nowrap ${ev.color} font-semibold border border-black/10`}
                                             style={{top:`calc(${thH} + ${ev.lane} * ${mdH})`,left:`calc(${(100/7)*si}% + 2px)`,width:`calc(${(100/7)*sp}% - 4px)`,height:`calc(${mdH} - 2px)`,zIndex:5}}>{ev.title}</div>;
                                     })}
                                     {wk.map(d=>{const dk=formatDateKey(d);return <DayCell key={dk} date={d} dayData={calendarData?.dayDataMap.get(dk)} isToday={dk===todayKey} isCurrentMonth={d.getMonth()===m} reservedHeight={rh} onClick={onDayClick}/>;})}
@@ -555,7 +581,6 @@
             clearData:()=>{['schoolEvents','schoolHolidays','schoolSpecialEvents','schoolName','schoolLogo','userOverrides','dutyOverrides'].forEach(k=>localStorage.removeItem(k));}
         };
 
-        // === DataUploadModal ===
         const DataUploadModal = ({onDataLoaded, onClose}) => {
             const [sn,setSn]=useState(SM.getSchoolName()||'');const[ev,setEv]=useState(null);const[hd,setHd]=useState(null);const[se,setSe]=useState(null);
             const[logo,setLogo]=useState(SM.getLogo());const[uf,setUf]=useState({events:false,holidays:false,specialEvents:false,logo:false});const[err,setErr]=useState('');
@@ -569,34 +594,31 @@
             const submit=()=>{if(!sn.trim()){setErr('학교명을 입력해주세요.');return;}SM.saveSchoolName(sn);if(ev)SM.saveEvents(ev);if(hd)SM.saveHolidays(hd);if(se)SM.saveSpecialEvents(se);if(logo)SM.saveLogo(logo);
                 onDataLoaded({schoolName:sn,events:ev||SM.getEvents(),holidays:hd||SM.getHolidays(),specialEvents:se||SM.getSpecialEvents(),logo});};
             return(
-                <div className="fixed inset-0 bg-black/50 z-50 flex justify-center items-center p-4">
+                <div className="fixed inset-0 bg-black/50 z-50 flex justify-center items-center p-4 print:hidden">
                     <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6">
                         <h1 className="text-3xl font-bold text-slate-800 mb-6">데이터 설정</h1>
                         <div className="space-y-6">
                             <div className="bg-slate-50 p-4 rounded-lg">
                                 <h2 className="font-semibold text-slate-800 mb-4">학교 정보</h2>
                                 <div className="mb-4"><label className="block text-sm font-medium text-slate-700 mb-2">학교명 *</label><input type="text" placeholder="예: 원묵고등학교" value={sn} onChange={e=>setSn(e.target.value)} maxLength={50} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"/></div>
-                                <div className="mb-4"><label className="block text-sm font-medium text-slate-700 mb-2">학교 로고 <span className="text-xs text-slate-500">(선택)</span></label>
-                                <div className="flex items-center gap-2"><input type="file" accept="image/*" onChange={e=>hfc(e,'logo')} className="flex-1 px-3 py-2 border border-slate-300 rounded-lg text-sm"/>{uf.logo&&<span className="text-green-600 font-semibold">✓</span>}</div>
-                                {logo&&<div className="mt-3 flex items-center gap-3"><img src={logo} alt="Logo" className="h-20 object-contain"/><button onClick={()=>{setLogo(null);setUf(p=>({...p,logo:false}));SM.removeLogo();}} className="px-3 py-2 bg-red-100 text-red-700 font-semibold rounded-lg hover:bg-red-200 text-sm">삭제</button></div>}</div>
+                                <div className="mb-4"><label className="block text-sm font-medium text-slate-700 mb-2">학교 로고</label>
+                                <div className="flex items-center gap-2"><input type="file" accept="image/*" onChange={e=>hfc(e,'logo')} className="flex-1 px-3 py-2 border border-slate-300 rounded-lg text-sm"/>{uf.logo&&<span className="text-green-600 font-semibold">✓</span>}</div></div>
                             </div>
                             <div className="bg-slate-50 p-4 rounded-lg">
                                 <h2 className="font-semibold text-slate-800 mb-4">학사일정 데이터 업로드</h2>
-                                <p className="text-xs text-slate-500 mb-4">CSV 또는 XLSX 파일</p>
-                                {[['학사일정','events','날짜, 행사1, 행사2...'],['공휴일','holidays','날짜, 공휴일명'],['특별 행사','specialEvents','날짜, 요일, 지도교사']].map(([label,type,hint])=>(
-                                    <div key={type} className="mb-4"><label className="block text-sm font-medium text-slate-700 mb-2">{label} <span className="text-xs text-slate-500">({hint})</span></label>
+                                {[['학사일정','events'],['공휴일','holidays'],['특별 행사','specialEvents']].map(([label,type])=>(
+                                    <div key={type} className="mb-4"><label className="block text-sm font-medium text-slate-700 mb-2">{label}</label>
                                     <div className="flex items-center gap-2"><input type="file" accept=".csv,.xlsx,.xls" onChange={e=>hfc(e,type)} className="flex-1 px-3 py-2 border border-slate-300 rounded-lg text-sm"/>{uf[type]&&<span className="text-green-600 font-semibold">✓</span>}</div></div>
                                 ))}
                             </div>
                             {err&&<div className="p-4 bg-red-100 border border-red-300 rounded-lg text-red-700 text-sm">{err}</div>}
-                            <div className="flex gap-3 pt-4"><button onClick={submit} className="flex-1 px-4 py-3 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700">저장하고 닫기</button><button onClick={onClose} className="flex-1 px-4 py-3 bg-slate-300 text-slate-700 font-semibold rounded-lg hover:bg-slate-400">취소</button></div>
+                            <div className="flex gap-3 pt-4"><button onClick={submit} className="flex-1 px-4 py-3 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700">저장</button><button onClick={onClose} className="flex-1 px-4 py-3 bg-slate-300 text-slate-700 font-semibold rounded-lg hover:bg-slate-400">취소</button></div>
                         </div>
                     </div>
                 </div>
             );
         };
 
-        // === App ===
         const App = () => {
             const[red,setRed]=useState('');const[rhd,setRhd]=useState('');const[rdd,setRdd]=useState('');
             const[logo,setLogo]=useState(null);const[sdm,setSdm]=useState(false);const[vd,setVd]=useState(new Date());
@@ -617,20 +639,19 @@
             const cd=useMemo(()=>processCalendarData(re,hd,du,uo,duo),[re,hd,du,uo,duo]);
 
             const handleDataLoaded=(d)=>{setSn(d.schoolName);setRed(d.events);setRhd(d.holidays);setRdd(d.specialEvents);if(d.logo)setLogo(d.logo);setSdm(false);};
-            const handleReset=()=>{if(window.confirm('정말로 모든 데이터를 초기화하시겠습니까?')){SM.clearData();SM.saveSchoolName(DEFAULT_SCHOOL_NAME);SM.saveLogo(DEFAULT_LOGO_DATA_URL);SM.saveEvents(rawEventsCsv);SM.saveHolidays(rawHolidaysCsv);SM.saveSpecialEvents(rawDutiesCsv);
-                setSn(DEFAULT_SCHOOL_NAME);setLogo(DEFAULT_LOGO_DATA_URL);setRed(rawEventsCsv);setRhd(rawHolidaysCsv);setRdd(rawDutiesCsv);setUo({});setDuo({});setSdm(false);}};
+            const handleReset=()=>{if(window.confirm('정말로 모든 데이터를 초기화하시겠습니까?')){SM.clearData();window.location.reload();}};
 
-            const handleSaveOverride=useCallback((dk,list)=>{setUo(p=>{const n={...p,[dk]:list};SM.saveOverrides(n);return n;});setSel(null);},[]);
-            const handleRemoveOverride=useCallback((dk)=>{setUo(p=>{const n={...p};delete n[dk];SM.saveOverrides(n);return n;});setSel(null);},[]);
-            const handleSaveDutyOverride=useCallback((dk,text)=>{setDuo(p=>{const n={...p,[dk]:text};SM.saveDutyOverrides(n);return n;});setSel(null);},[]);
-            const handleRemoveDutyOverride=useCallback((dk)=>{setDuo(p=>{const n={...p};delete n[dk];SM.saveDutyOverrides(n);return n;});setSel(null);},[]);
+            const handleSaveOverride=useCallback((dk,list)=>{setUo(p=>{const n={...p,[dk]:list};SM.saveOverrides(n);return n;});},[]);
+            const handleRemoveOverride=useCallback((dk)=>{setUo(p=>{const n={...p};delete n[dk];SM.saveOverrides(n);return n;});},[]);
+            const handleSaveDutyOverride=useCallback((dk,text)=>{setDuo(p=>{const n={...p,[dk]:text};SM.saveDutyOverrides(n);return n;});},[]);
+            const handleRemoveDutyOverride=useCallback((dk)=>{setDuo(p=>{const n={...p};delete n[dk];SM.saveDutyOverrides(n);return n;});},[]);
             const handleDayClick=useCallback((dd)=>setSel(dd),[]);
 
             return(
-                <div className="w-full max-w-7xl mx-auto bg-white rounded-2xl shadow-xl flex flex-col min-h-[85vh] overflow-hidden">
+                <div className="w-full max-w-7xl mx-auto bg-white rounded-2xl shadow-xl flex flex-col min-h-[85vh] overflow-hidden print:shadow-none print:rounded-none">
                     <Header viewDate={vd} setViewDate={setVd} startOfWeek={sow} setStartOfWeek={setSow} onReset={handleReset} onShowDataModal={()=>setSdm(true)} schoolName={sn} schoolLogo={logo}/>
                     <main className="flex-grow p-1 sm:p-2 lg:p-4"><Calendar viewDate={vd} startOfWeek={sow} calendarData={cd} onDayClick={handleDayClick}/></main>
-                    <footer className="p-2 text-center text-xs text-slate-500 border-t border-slate-200">© 2026 KH KIM. All Rights Reserved.</footer>
+                    <footer className="p-2 text-center text-xs text-slate-500 border-t border-slate-200 print:hidden">© 2026 KH KIM. All Rights Reserved.</footer>
                     {sel&&<EventModal dayData={sel} onClose={()=>setSel(null)} onSaveOverride={handleSaveOverride} onRemoveOverride={handleRemoveOverride} onSaveDutyOverride={handleSaveDutyOverride} onRemoveDutyOverride={handleRemoveDutyOverride}/>}
                     {sdm&&<DataUploadModal onDataLoaded={handleDataLoaded} onClose={()=>setSdm(false)}/>}
                 </div>
@@ -638,9 +659,7 @@
         };
 
         const root=ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<React.StrictMode><App/></React.StrictMode>);
+        root.render(<App/>);
     </script>
 </body>
 </html>
-
-
