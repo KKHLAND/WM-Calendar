@@ -41,6 +41,9 @@
         .print\:hidden {
           display: none !important;
         }
+        .print\:block {
+          display: block !important;
+        }
         /* 배경색 강제 출력 */
         * {
           -webkit-print-color-adjust: exact !important;
@@ -472,13 +475,11 @@
             return(
                 <header className="bg-white shadow-sm sticky top-0 z-20">
                     <div className="p-2 flex justify-between items-center gap-4">
-                        {/* [수정] 인쇄 시 미니 달력 보임처리 (print:block) */}
                         <div className="hidden lg:block print:block"><MiniCalendar date={pm} startOfWeek={startOfWeek}/></div>
                         <div className="text-center p-4 sm:p-6 rounded-xl shadow-lg bg-gradient-to-r from-sky-500 to-indigo-600 text-white select-none flex-grow">
                             <h1 className="text-2xl sm:text-3xl font-bold">스마트 스쿨 캘린더</h1>
                             <p className="text-sm sm:text-base mt-1">{schoolName?schoolName+" ":""}학사 일정 관리 시스템</p>
                         </div>
-                        {/* [수정] 인쇄 시 미니 달력 보임처리 (print:block) */}
                         <div className="hidden lg:block print:block"><MiniCalendar date={nm} startOfWeek={startOfWeek}/></div>
                     </div>
                     <div className="p-2 border-t border-slate-200 flex items-center justify-between flex-wrap gap-2">
@@ -493,7 +494,6 @@
                         </div>
                         <div className="flex items-center gap-2">
                             <select value={startOfWeek} onChange={e=>setStartOfWeek(Number(e.target.value))} className={`${selCls} print:hidden`}><option value={0}>일요일 시작</option><option value={1}>월요일 시작</option></select>
-                            {/* [수정] 인쇄하기 버튼 자체는 인쇄 시 숨김 */}
                             <button onClick={handlePrint} className="px-3 py-2 border border-gray-300 bg-emerald-50 text-emerald-700 text-sm font-medium rounded-md shadow-sm hover:bg-emerald-100 flex items-center gap-1 print:hidden">
                                 <PrinterIcon/><span className="hidden sm:inline">인쇄하기</span>
                             </button>
