@@ -147,10 +147,10 @@
 "2026. 7. 6","기말고사","교원학습공동체4",""
 "2026. 7. 7","선택과목설명회","",""
 "2026. 7. 8","학력평가(3)","",""
-"2026. 7. 10","자율","최성보 정서적 지원 교육(콘서트)","경제학 특강"
-"2026. 7. 13","최성보 정서적 지원 교육(특강)","창의상상 인문 정규4",""
+"2026. 7. 10","자율","학점이수 정서적 지원 교육(콘서트)","경제학 특강"
+"2026. 7. 13","학점이수 정서적 지원 교육(특강)","창의상상 인문 정규4",""
 "2026. 7. 15","경제학 특강","",""
-"2026. 7. 16","최성보 보충지도 OT","",""
+"2026. 7. 16","학점이수 보충지도 OT","",""
 "2026. 7. 20","예술교육발표회","전교직원회의4","방학식"
 "2026. 7. 21","과학실험캠프","",""
 "2026. 7. 22","4차산업공학캠프","",""
@@ -205,10 +205,10 @@
 "2026. 12. 14","기말고사(1,2)","학년협의회",""
 "2026. 12. 15","기말고사(1,2)","",""
 "2026. 12. 16","기말고사(1,2)","",""
-"2026. 12. 18","*최성보 정서적 지원 교육(골든벨)","",""
-"2026. 12. 23","*최성보 정서적 지원 교육(콘서트)","교원학습공동체 8",""
+"2026. 12. 18","*학점이수 정서적 지원 교육(골든벨)","",""
+"2026. 12. 23","*학점이수 정서적 지원 교육(콘서트)","교원학습공동체 8",""
 "2026. 12. 24","외국어 노래제","",""
-"2026. 12. 28","*최성보 보충지도 OT","끼자랑",""
+"2026. 12. 28","*학점이수 보충지도 OT","끼자랑",""
 "2026. 12. 29","예술교육발표회","",""
 "2026. 12. 30","전교직원회의8","(3학년 졸업사정안)","<방학식>"
 "2027. 2. 1","<개학>","",""
@@ -472,12 +472,14 @@
             return(
                 <header className="bg-white shadow-sm sticky top-0 z-20">
                     <div className="p-2 flex justify-between items-center gap-4">
-                        <div className="hidden lg:block print:hidden"><MiniCalendar date={pm} startOfWeek={startOfWeek}/></div>
+                        {/* [수정] 인쇄 시 미니 달력 보임처리 (print:block) */}
+                        <div className="hidden lg:block print:block"><MiniCalendar date={pm} startOfWeek={startOfWeek}/></div>
                         <div className="text-center p-4 sm:p-6 rounded-xl shadow-lg bg-gradient-to-r from-sky-500 to-indigo-600 text-white select-none flex-grow">
                             <h1 className="text-2xl sm:text-3xl font-bold">스마트 스쿨 캘린더</h1>
                             <p className="text-sm sm:text-base mt-1">{schoolName?schoolName+" ":""}학사 일정 관리 시스템</p>
                         </div>
-                        <div className="hidden lg:block print:hidden"><MiniCalendar date={nm} startOfWeek={startOfWeek}/></div>
+                        {/* [수정] 인쇄 시 미니 달력 보임처리 (print:block) */}
+                        <div className="hidden lg:block print:block"><MiniCalendar date={nm} startOfWeek={startOfWeek}/></div>
                     </div>
                     <div className="p-2 border-t border-slate-200 flex items-center justify-between flex-wrap gap-2">
                         <div className="flex items-center gap-2 sm:gap-4">
@@ -491,7 +493,8 @@
                         </div>
                         <div className="flex items-center gap-2">
                             <select value={startOfWeek} onChange={e=>setStartOfWeek(Number(e.target.value))} className={`${selCls} print:hidden`}><option value={0}>일요일 시작</option><option value={1}>월요일 시작</option></select>
-                            <button onClick={handlePrint} className="px-3 py-2 border border-gray-300 bg-emerald-50 text-emerald-700 text-sm font-medium rounded-md shadow-sm hover:bg-emerald-100 flex items-center gap-1">
+                            {/* [수정] 인쇄하기 버튼 자체는 인쇄 시 숨김 */}
+                            <button onClick={handlePrint} className="px-3 py-2 border border-gray-300 bg-emerald-50 text-emerald-700 text-sm font-medium rounded-md shadow-sm hover:bg-emerald-100 flex items-center gap-1 print:hidden">
                                 <PrinterIcon/><span className="hidden sm:inline">인쇄하기</span>
                             </button>
                             <button onClick={onShowDataModal} className="px-3 py-2 border border-gray-300 bg-blue-50 text-blue-700 text-sm font-medium rounded-md shadow-sm hover:bg-blue-100 print:hidden">데이터 설정</button>
