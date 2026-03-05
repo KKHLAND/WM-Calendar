@@ -18,7 +18,7 @@
       @media print {
         @page {
           size: A4 landscape;
-          margin: 0.5cm;
+          margin: 0.3cm; /* 여백을 조금 더 줄임 */
         }
         body {
           background: white !important;
@@ -31,13 +31,19 @@
           width: 100% !important;
           max-width: none !important;
           min-height: 0 !important;
-          /* 사용자 피드백 반영: 인쇄 비율 98% 적용 */
-          zoom: 98%;
+          /* 인쇄 배율 최적화: 96%로 조정하여 더 안정적으로 한 장에 포함 */
+          zoom: 96%;
           transform-origin: top left;
         }
-        header, main, footer {
-          padding: 0 !important;
-        }
+        /* 인쇄 시 수직 공간 확보를 위한 패딩 최적화 */
+        header { padding: 0 !important; }
+        header .p-4, header .sm\:p-6 { padding: 0.5rem !important; }
+        header h1 { font-size: 1.5rem !important; line-height: 1.2 !important; }
+        header p { font-size: 0.75rem !important; margin-top: 0 !important; }
+        
+        main { padding: 0.2rem !important; }
+        footer { display: none !important; } /* 푸터 제거하여 공간 확보 */
+
         .print\:hidden {
           display: none !important;
         }
